@@ -1,7 +1,9 @@
 ---
-import "../styles/global.css";
-import { ClientRouter } from "astro:transitions";
 import ThemeIcon from "../components/Header/ThemeIcon.astro";
+import BaseHead from "../components/BaseHead.astro";
+
+const title = "diffpack - Compare package versions across ecosystems";
+const description = "Compare package versions across ecosystems. Clean. Fast. Source-aware dependency review tool for npm and crates.io.";
 
 const tiles = [
 	{
@@ -24,33 +26,7 @@ const tiles = [
 <!doctype html>
 <html lang="en" data-theme>
 	<head>
-		<meta charset="utf-8">
-		<title>diffpack - Compare package versions across ecosystems</title>
-		<meta name="viewport" content="width=device-width, initial-scale=1.0">
-		<meta name="description" content="Compare package versions across ecosystems. Clean. Fast. Source-aware dependency review tool for npm and crates.io.">
-		<meta name="keywords" content="dependency, review, diff, npm, crates.io, rust, javascript, typescript, package, compare">
-
-		<!-- Open Graph / Facebook -->
-		<meta property="og:type" content="website">
-		<meta property="og:url" content="https://diffpack.io/">
-		<meta property="og:title" content="diffpack - Compare package versions across ecosystems">
-		<meta property="og:description" content="Compare package versions across ecosystems. Clean. Fast. Source-aware.">
-		<meta property="og:image" content="/android-chrome-512x512.png">
-
-		<!-- Twitter -->
-		<meta property="twitter:card" content="summary_large_image">
-		<meta property="twitter:url" content="https://diffpack.io/">
-		<meta property="twitter:title" content="diffpack - Compare package versions across ecosystems">
-		<meta property="twitter:description" content="Compare package versions across ecosystems. Clean. Fast. Source-aware.">
-		<meta property="twitter:image" content="/android-chrome-512x512.png">
-
-		<link rel="icon" type="image/x-icon" href="/favicon.ico">
-		<link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
-		<link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png">
-		<link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png">
-
-		<script src="../utils/theme.ts"></script>
-		<ClientRouter/>
+		<BaseHead title={title} description={description} />
 	</head>
 
 	<body
