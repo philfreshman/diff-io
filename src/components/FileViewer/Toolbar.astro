@@ -1,7 +1,23 @@
+---
+import UnfoldIcon from "../Icons/UnfoldIcon.astro";
+import ThemeSelect from "./ThemeSelect.astro";
+---
+
 <div
 	class="w-full h-9 mb-3 bg-white dark:bg-neutral-950 border border-neutral-300 dark:border-neutral-700 rounded-md flex items-center px-3 justify-between"
 >
 	<div class="flex items-center gap-4">
+		<div
+			class="flex items-center gap-2 border-r border-neutral-300 dark:border-neutral-700 pr-4 mr-2"
+		>
+			<button
+				id="expand-all-btn"
+				class="p-1.5 rounded-md hover:bg-neutral-100 dark:hover:bg-neutral-800 text-neutral-600 dark:text-neutral-400 transition-colors"
+				title="Expand all"
+			>
+				<UnfoldIcon/>
+			</button>
+		</div>
 		<div
 			id="diff-filename"
 			class="text-sm font-semibold text-neutral-900 dark:text-white"
@@ -11,111 +27,13 @@
 			class="hidden px-2 py-0.5 rounded bg-neutral-100 dark:bg-neutral-800 text-[10px] font-medium text-neutral-600 dark:text-neutral-400 uppercase"
 		/>
 	</div>
-	<div class="flex items-center gap-2">
-		<label
-			for="prism-theme"
-			class="text-xs text-neutral-500 dark:text-neutral-400"
-		>
-			Theme:
-		</label>
-		<select
-			id="prism-theme"
-			class="text-xs bg-transparent border-none focus:ring-0 text-neutral-700 dark:text-neutral-300 cursor-pointer"
-		>
-			<optgroup label="Standard Themes">
-				<option value="prism">Default</option>
-				<option value="prism-dark">Dark</option>
-				<option value="prism-okaidia">Okaidia</option>
-				<option value="prism-solarizedlight">Solarized Light</option>
-				<option value="prism-tomorrow">Tomorrow Night</option>
-				<option value="prism-twilight">Twilight</option>
-			</optgroup>
-			<optgroup label="Prism Themes Repo">
-				<option value="atom-dark">Atom Dark</option>
-				<option value="cb">CB</option>
-				<option value="dracula">Dracula</option>
-				<option value="duotone-dark">Duotone Dark</option>
-				<option value="duotone-earth">Duotone Earth</option>
-				<option value="duotone-forest">Duotone Forest</option>
-				<option value="duotone-light">Duotone Light</option>
-				<option value="duotone-sea">Duotone Sea</option>
-				<option value="duotone-space">Duotone Space</option>
-				<option value="ghcolors">GitHub Colors</option>
-				<option value="material-dark">Material Dark</option>
-				<option value="material-light">Material Light</option>
-				<option value="material-oceanic">Material Oceanic</option>
-				<option value="night-owl">Night Owl</option>
-				<option value="nord">Nord</option>
-				<option value="shades-of-purple">Shades of Purple</option>
-				<option value="synthwave84">Synthwave 84</option>
-				<option value="vs">VS</option>
-				<option value="vsc-dark-plus">VSC Dark Plus</option>
-				<option value="xonokai">Xonokai</option>
-			</optgroup>
-		</select>
-	</div>
+	<ThemeSelect/>
 </div>
 
 <script>
-	const themeSelect = document.getElementById(
-		"prism-theme",
-	) as HTMLSelectElement;
-	let themeStyle = document.getElementById(
-		"prism-theme-style",
-	) as HTMLStyleElement;
+	const expandAllBtn = document.getElementById("expand-all-btn");
 
-	if (!themeStyle) {
-		themeStyle = document.createElement("style");
-		themeStyle.id = "prism-theme-style";
-		document.head.appendChild(themeStyle);
-	}
-
-	const THEME_STORAGE_KEY = "prism_theme";
-
-	// Load saved theme
-	const savedTheme = localStorage.getItem(THEME_STORAGE_KEY) || "prism";
-	if (themeSelect) themeSelect.value = savedTheme;
-	updatePrismTheme(savedTheme);
-
-	themeSelect?.addEventListener("change", (e) => {
-		const theme = (e.target as HTMLSelectElement).value;
-		localStorage.setItem(THEME_STORAGE_KEY, theme);
-		updatePrismTheme(theme);
+	expandAllBtn?.addEventListener("click", () => {
+		window.dispatchEvent(new CustomEvent("expand-all-diff"));
 	});
-
-	async function updatePrismTheme(theme: string) {
-		const isStandardTheme = [
-			"prism",
-			"prism-dark",
-			"prism-okaidia",
-			"prism-solarizedlight",
-			"prism-tomorrow",
-			"prism-twilight",
-		].includes(theme);
-
-		const themes = import.meta.glob(
-			[
-				"/node_modules/prismjs/themes/*.css",
-				"/node_modules/prism-themes/themes/*.css",
-			],
-			{ query: "?raw", eager: true },
-		);
-
-		const themeKey = isStandardTheme
-			? `/node_modules/prismjs/themes/${theme}.css`
-			: `/node_modules/prism-themes/themes/prism-${theme}.css`;
-
-		const cssModule = themes[themeKey] as { default: string } | undefined;
-		if (cssModule) {
-			themeStyle.textContent = cssModule.default;
-		} else {
-			console.error(`Theme not found: ${themeKey}`);
-			const defaultTheme = themes["/node_modules/prismjs/themes/prism.css"] as
-				| { default: string }
-				| undefined;
-			if (defaultTheme) {
-				themeStyle.textContent = defaultTheme.default;
-			}
-		}
-	}
 </script>

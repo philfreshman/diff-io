@@ -1,0 +1,18 @@
+---
+import FoldDownIcon from "../Icons/FoldDownIcon.astro";
+import FoldUpIcon from "../Icons/FoldUpIcon.astro";
+
+interface Props {
+	direction: "up" | "down";
+	title: string;
+}
+
+const { direction, title } = Astro.props;
+---
+
+<div
+	class="w-full h-full flex items-center justify-center cursor-pointer text-[#586069] dark:text-[#8b949e] transition-colors duration-200 hover:bg-[#c8e1ff] hover:text-[#0366d6] dark:hover:bg-[#38444d] dark:hover:text-[#58a6ff] [&_svg]:w-3.5 [&_svg]:h-3.5"
+	title={title}
+>
+	{direction === "up" ? <FoldUpIcon /> : <FoldDownIcon />}
+</div>

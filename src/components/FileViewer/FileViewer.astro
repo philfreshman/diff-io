@@ -1,5 +1,7 @@
 ---
 import DiffArea from "./DiffArea.astro";
+import ExpandAllContentButton from "./ExpandAllContentButton.astro";
+import ExpandButton from "./ExpandButton.astro";
 import Toolbar from "./Toolbar.astro";
 ---
 
@@ -7,6 +9,18 @@ import Toolbar from "./Toolbar.astro";
 	<Toolbar/>
 	<DiffArea/>
 </div>
+
+<template id="expand-up-tpl">
+	<ExpandButton direction="up" title=""/>
+</template>
+
+<template id="expand-down-tpl">
+	<ExpandButton direction="down" title=""/>
+</template>
+
+<template id="expand-all-content-tpl">
+	<ExpandAllContentButton/>
+</template>
 
 <script>
 	import Prism from "prismjs";
@@ -35,6 +49,43 @@ import Toolbar from "./Toolbar.astro";
 	const diffFilename = document.getElementById("diff-filename");
 	const diffContent = document.getElementById("diff-content");
 	const languageBadge = document.getElementById("language-badge");
+
+	interface DiffLine {
+		type: "added" | "deleted" | "unchanged" | "hunk";
+		line: string;
+		oldNum: number | null;
+		newNum: number | null;
+		forceVisible?: boolean;
+	}
+
+	let currentProcessedLines: DiffLine[] = [];
+	let currentIsDiff = false;
+	let currentPrismLang: Prism.Grammar = Prism.languages.clike;
+	let currentLang = "";
+
+	const CLASSES = {
+		row: "flex leading-6 whitespace-pre-wrap break-all",
+		rowDeleted: "bg-[#ffeef0] dark:bg-[#442d30]",
+		rowAdded: "bg-[#e6ffec] dark:bg-[#233329]",
+		rowHunk:
+			"bg-[#f1f8ff] text-neutral-500 dark:bg-[#1e2836] dark:text-neutral-400",
+		rowCollapsed:
+			"bg-neutral-50 text-neutral-500 cursor-default dark:bg-[#0d1117] dark:text-neutral-400",
+		lineNumber:
+			"w-[45px] min-w-[45px] px-2 text-right text-neutral-400 select-none border-r border-neutral-100 dark:text-neutral-500  dark:border-[#30363d]",
+		lineNumberDeleted:
+			"bg-[#ffdce0] border-r-[#fdaeb7] dark:bg-[#61222a] dark:border-r-[#6e363b]",
+		lineNumberAdded:
+			"bg-[#cdffd8] border-r-[#bef5cb] dark:bg-[#1a3a2a] dark:border-r-[#2b4b3b]",
+		lineNumberHunk:
+			"bg-[#dbedff] border-r-[#c8e1ff] dark:bg-[#263449] dark:border-r-[#38444d]",
+		lineNumberCollapsed:
+			"bg-[#dbedff] border-r-[#c8e1ff] flex flex-col items-center justify-center p-0 gap-0 w-[90px] min-w-[90px] dark:bg-[#263449] dark:border-r-[#38444d]",
+		content:
+			"px-3 flex-1 [&_.token.deleted]:bg-transparent [&_.token.deleted]:no-underline [&_.token.inserted]:bg-transparent",
+		contentCollapsed:
+			"flex items-center bg-[#f1f8ff] text-neutral-500 italic h-10 dark:bg-[#1e2836] dark:text-neutral-400",
+	};
 
 	function resetDiff() {
 		diffContainer?.classList.add("hidden");
@@ -98,18 +149,20 @@ import Toolbar from "./Toolbar.astro";
 		diffContainer.classList.remove("hidden");
 		diffFilename.textContent = filename;
 
-		const lang = isDiff ? "diff" : getLanguageFromFilename(filename);
-		const prismLang = Prism.languages[lang] || Prism.languages.clike;
+		currentIsDiff = isDiff;
+		currentLang = isDiff ? "diff" : getLanguageFromFilename(filename);
+		currentPrismLang =
+			(Prism.languages[currentLang] as Prism.Grammar) || Prism.languages.clike;
 
 		if (languageBadge) {
-			languageBadge.textContent = lang;
+			languageBadge.textContent = currentLang;
 			languageBadge.classList.remove("hidden");
 		}
 
-		diffContent.innerHTML = "";
+		currentProcessedLines = [];
+		const lines = diff.split("\n");
 
 		if (isDiff) {
-			const lines = diff.split("\n");
 			let oldLineNum = 0;
 			let newLineNum = 0;
 
@@ -122,15 +175,9 @@ import Toolbar from "./Toolbar.astro";
 				)
 					return;
 
-				const row = document.createElement("div");
-				row.className = "diff-row";
-
-				const oldNumCell = document.createElement("div");
-				oldNumCell.className = "diff-line-number";
-				const newNumCell = document.createElement("div");
-				newNumCell.className = "diff-line-number";
-				const contentCell = document.createElement("div");
-				contentCell.className = "diff-line-content";
+				let type: DiffLine["type"] = "unchanged";
+				let oldNum: number | null = null;
+				let newNum: number | null = null;
 
 				if (line.startsWith("@@")) {
 					const match = line.match(/@@ -(\d+),?\d* \+(\d+),?\d* @@/);
@@ -138,61 +185,199 @@ import Toolbar from "./Toolbar.astro";
 						oldLineNum = parseInt(match[1], 10) - 1;
 						newLineNum = parseInt(match[2], 10) - 1;
 					}
-					row.classList.add("diff-row-hunk");
-					oldNumCell.textContent = "...";
-					newNumCell.textContent = "...";
+					type = "hunk";
 				} else if (line.startsWith("-")) {
 					oldLineNum++;
-					oldNumCell.textContent = oldLineNum.toString();
-					newNumCell.textContent = "";
-					row.classList.add("diff-row-deleted");
+					oldNum = oldLineNum;
+					type = "deleted";
 				} else if (line.startsWith("+")) {
 					newLineNum++;
-					oldNumCell.textContent = "";
-					newNumCell.textContent = newLineNum.toString();
-					row.classList.add("diff-row-added");
+					newNum = newLineNum;
+					type = "added";
 				} else {
 					oldLineNum++;
 					newLineNum++;
-					oldNumCell.textContent = oldLineNum.toString();
-					newNumCell.textContent = newLineNum.toString();
+					oldNum = oldLineNum;
+					newNum = newLineNum;
+					type = "unchanged";
 				}
 
-				contentCell.innerHTML = Prism.highlight(
-					line,
-					Prism.languages.diff,
-					"diff",
-				);
-				row.appendChild(oldNumCell);
-				row.appendChild(newNumCell);
-				row.appendChild(contentCell);
-				diffContent.appendChild(row);
+				currentProcessedLines.push({ type, line, oldNum, newNum });
 			});
 		} else {
-			const lines = diff.split("\n");
-
 			lines.forEach((line, index) => {
-				const row = document.createElement("div");
-				row.className = "diff-row";
-
-				const oldNumCell = document.createElement("div");
-				oldNumCell.className = "diff-line-number";
-				const newNumCell = document.createElement("div");
-				newNumCell.className = "diff-line-number";
-				const contentCell = document.createElement("div");
-				contentCell.className = "diff-line-content";
-
-				const lineNum = (index + 1).toString();
-				oldNumCell.textContent = lineNum;
-				newNumCell.textContent = lineNum;
-
-				contentCell.innerHTML = Prism.highlight(line || " ", prismLang, lang);
-				row.appendChild(oldNumCell);
-				row.appendChild(newNumCell);
-				row.appendChild(contentCell);
-				diffContent.appendChild(row);
+				const lineNum = index + 1;
+				currentProcessedLines.push({
+					type: "unchanged",
+					line,
+					oldNum: lineNum,
+					newNum: lineNum,
+				});
 			});
 		}
+
+		renderDiffContent();
+	}
+
+	function renderDiffContent(expandAll = false) {
+		if (!diffContent) return;
+		diffContent.innerHTML = "";
+
+		const CONTEXT_LINES = 3;
+		const isVisible = new Array(currentProcessedLines.length).fill(false);
+
+		if (expandAll || !currentIsDiff) {
+			isVisible.fill(true);
+		} else {
+			currentProcessedLines.forEach((line, i) => {
+				if (line.type !== "unchanged" || line.forceVisible) {
+					isVisible[i] = true;
+					if (line.type !== "hunk") {
+						for (let j = 1; j <= CONTEXT_LINES; j++) {
+							if (i - j >= 0) isVisible[i - j] = true;
+							if (i + j < currentProcessedLines.length) isVisible[i + j] = true;
+						}
+					}
+				}
+			});
+		}
+
+		for (let i = 0; i < currentProcessedLines.length; i++) {
+			if (isVisible[i]) {
+				const line = currentProcessedLines[i];
+				const row = createDiffRow(line);
+				diffContent.appendChild(row);
+			} else {
+				const start = i;
+				while (i < currentProcessedLines.length && !isVisible[i]) {
+					i++;
+				}
+				const end = i - 1;
+				const collapsedRow = createCollapsedRow(start, end);
+				diffContent.appendChild(collapsedRow);
+				i--;
+			}
+		}
+	}
+
+	function createDiffRow(lineObj: DiffLine) {
+		const { type, line, oldNum, newNum } = lineObj;
+		const row = document.createElement("div");
+		row.className = CLASSES.row;
+
+		const oldNumCell = document.createElement("div");
+		oldNumCell.className = CLASSES.lineNumber;
+		const newNumCell = document.createElement("div");
+		newNumCell.className = CLASSES.lineNumber;
+		const contentCell = document.createElement("div");
+		contentCell.className = CLASSES.content;
+
+		if (type === "hunk") {
+			row.className += ` ${CLASSES.rowHunk}`;
+			oldNumCell.className += ` ${CLASSES.lineNumberHunk}`;
+			newNumCell.className += ` ${CLASSES.lineNumberHunk}`;
+			oldNumCell.textContent = "...";
+			newNumCell.textContent = "...";
+		} else if (type === "deleted") {
+			oldNumCell.textContent = oldNum?.toString() || "";
+			newNumCell.textContent = "";
+			row.className += ` ${CLASSES.rowDeleted}`;
+			oldNumCell.className += ` ${CLASSES.lineNumberDeleted}`;
+		} else if (type === "added") {
+			oldNumCell.textContent = "";
+			newNumCell.textContent = newNum?.toString() || "";
+			row.className += ` ${CLASSES.rowAdded}`;
+			newNumCell.className += ` ${CLASSES.lineNumberAdded}`;
+		} else {
+			oldNumCell.textContent = oldNum?.toString() || "";
+			newNumCell.textContent = newNum?.toString() || "";
+		}
+
+		contentCell.innerHTML = Prism.highlight(
+			line || " ",
+			currentIsDiff
+				? Prism.languages.diff
+				: (currentPrismLang as Prism.Grammar),
+			currentLang,
+		);
+		row.appendChild(oldNumCell);
+		row.appendChild(newNumCell);
+		row.appendChild(contentCell);
+		return row;
+	}
+
+	function createCollapsedRow(start: number, end: number) {
+		const row = document.createElement("div");
+		row.className = `${CLASSES.row} ${CLASSES.rowCollapsed}`;
+
+		const expanderCell = document.createElement("div");
+		expanderCell.className = CLASSES.lineNumberCollapsed;
+		const contentCell = document.createElement("div");
+		contentCell.className = `${CLASSES.content} ${CLASSES.contentCollapsed}`;
+
+		const count = end - start + 1;
+		contentCell.textContent = `@@ Collapsed ${count} lines @@`;
+
+		const createBtn = (
+			direction: "up" | "down",
+			title: string,
+			onClick: (e: MouseEvent) => void,
+		) => {
+			const template = document.getElementById(
+				`expand-${direction}-tpl`,
+			) as HTMLTemplateElement;
+			const clone = template.content.cloneNode(true) as DocumentFragment;
+			const btn = clone.firstElementChild as HTMLElement;
+			btn.title = title;
+			btn.onclick = (e) => {
+				e.stopPropagation();
+				onClick(e);
+			};
+			return btn;
+		};
+
+		const onExpandDown = () => {
+			for (let i = start; i < Math.min(start + 20, end + 1); i++) {
+				currentProcessedLines[i].forceVisible = true;
+			}
+			renderDiffContent();
+		};
+
+		const onExpandUp = () => {
+			for (let i = Math.max(start, end - 19); i <= end; i++) {
+				currentProcessedLines[i].forceVisible = true;
+			}
+			renderDiffContent();
+		};
+
+		const onExpandAll = () => {
+			for (let i = start; i <= end; i++) {
+				currentProcessedLines[i].forceVisible = true;
+			}
+			renderDiffContent();
+		};
+
+		if (start === 0) {
+			expanderCell.appendChild(createBtn("up", "Expand all", onExpandAll));
+		} else if (end === currentProcessedLines.length - 1) {
+			expanderCell.appendChild(createBtn("down", "Expand all", onExpandAll));
+		} else {
+			expanderCell.appendChild(createBtn("down", "Expand down", onExpandDown));
+			expanderCell.appendChild(createBtn("up", "Expand up", onExpandUp));
+
+			// Add expand all to content cell as well for convenience
+			const template = document.getElementById(
+				"expand-all-content-tpl",
+			) as HTMLTemplateElement;
+			const clone = template.content.cloneNode(true) as DocumentFragment;
+			const expandAllBtn = clone.querySelector("span") as HTMLElement;
+			expandAllBtn.onclick = onExpandAll;
+			contentCell.prepend(expandAllBtn);
+		}
+
+		row.appendChild(expanderCell);
+		row.appendChild(contentCell);
+		return row;
 	}
 
 	interface FileDiffDetail {
@@ -202,6 +387,9 @@ import Toolbar from "./Toolbar.astro";
 	}
 
 	window.addEventListener("start-diff", resetDiff);
+	window.addEventListener("expand-all-diff", () => {
+		renderDiffContent(true);
+	});
 	window.addEventListener("file-diff", (e) => {
 		const customEvent = e as CustomEvent<FileDiffDetail>;
 		const detail = customEvent.detail;
