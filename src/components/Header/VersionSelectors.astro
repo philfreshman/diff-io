@@ -113,7 +113,9 @@
 
 	function updateUrl(pkg: string, from: string, to: string) {
 		const registry = getRegistry();
-		const pathParts = [registry, pkg, from, to].filter(Boolean);
+		const state = parseUrl(window.location.pathname);
+		const file = state.package === pkg ? state.file : "";
+		const pathParts = [registry, pkg, from, to, file].filter(Boolean);
 		const newPath = `/${pathParts.join("/")}`;
 		if (window.location.pathname !== newPath) {
 			window.history.pushState({}, "", newPath);

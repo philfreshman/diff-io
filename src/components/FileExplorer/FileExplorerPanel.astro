@@ -49,6 +49,7 @@ import TreeList from "./TreeList.astro";
 	let diffWorker: Worker | null = null;
 	let fromFiles: FileMap | null = null;
 	let toFiles: FileMap | null = null;
+	let selectedFilePath = "";
 
 	// SVGs
 	const chevronRight = `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4 text-neutral-600 dark:text-neutral-400 shrink-0"><polyline points="9 18 15 12 9 6"></polyline></svg>`;
@@ -122,6 +123,29 @@ import TreeList from "./TreeList.astro";
 					fromFiles = e.data.fromFiles;
 					toFiles = e.data.toFiles;
 					renderTree();
+
+					const state = parseUrl(window.location.pathname);
+					if (state.file) {
+						selectedFilePath = state.file;
+						const fromContent = fromFiles?.[state.file]?.content;
+						const toContent = toFiles?.[state.file]?.content;
+						if (fromContent !== undefined || toContent !== undefined) {
+							diffWorker.postMessage({
+								type: "get-diff",
+								filename: state.file,
+								fromContent,
+								toContent,
+							});
+							// Expand folders
+							const parts = state.file.split("/");
+							let current = "";
+							for (let i = 0; i < parts.length - 1; i++) {
+								current += (current ? "/" : "") + parts[i];
+								expandedKeys.add(current);
+							}
+							renderTree();
+						}
+					}
 				}
 			} else if (e.data.type === "error") {
 				console.error("Worker error:", e.data.error);
@@ -210,6 +234,35 @@ import TreeList from "./TreeList.astro";
 				diffWorker.postMessage({ type: "start-diff", registry, pkg, from, to });
 			}
 		});
+
+		window.addEventListener("popstate", () => {
+			const state = parseUrl(window.location.pathname);
+			if (state.file !== selectedFilePath) {
+				selectedFilePath = state.file;
+				if (selectedFilePath && diffWorker) {
+					const fromContent = fromFiles?.[selectedFilePath]?.content;
+					const toContent = toFiles?.[selectedFilePath]?.content;
+					if (fromContent !== undefined || toContent !== undefined) {
+						diffWorker.postMessage({
+							type: "get-diff",
+							filename: selectedFilePath,
+							fromContent,
+							toContent,
+						});
+					}
+				}
+				renderTree();
+			}
+		});
+	}
+
+	function updateUrl(file: string) {
+		const state = parseUrl(window.location.pathname);
+		const pathParts = [state.registry, state.package, state.from, state.to, file].filter(Boolean);
+		const newPath = `/${pathParts.join("/")}`;
+		if (window.location.pathname !== newPath) {
+			window.history.pushState({}, "", newPath);
+		}
 	}
 
 	function renderTree() {
@@ -295,6 +348,10 @@ import TreeList from "./TreeList.astro";
 			"flex items-center gap-1 py-1 px-1 pr-3 hover:bg-neutral-100 dark:hover:bg-neutral-800 cursor-pointer select-none rounded group w-full overflow-hidden";
 		row.style.paddingLeft = `${depth * 18 + 4}px`;
 
+		if (item.path === selectedFilePath) {
+			row.classList.add("bg-blue-50", "dark:bg-blue-900/20");
+		}
+
 		const toggleIcon = document.createElement("span");
 		toggleIcon.className = "w-4 flex items-center justify-center";
 		if (hasChildren) {
@@ -332,6 +389,10 @@ import TreeList from "./TreeList.astro";
 				}
 				renderTree();
 			} else if (item.type === "file" && diffWorker) {
+				selectedFilePath = item.path;
+				updateUrl(item.path);
+				renderTree();
+
 				const fromContent = fromFiles?.[item.path]?.content;
 				const toContent = toFiles?.[item.path]?.content;
 				diffWorker.postMessage({
