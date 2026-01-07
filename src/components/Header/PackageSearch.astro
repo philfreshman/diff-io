@@ -1,4 +1,6 @@
 ---
+import SearchIcon from "../Icons/SearchIcon.astro";
+
 const { registry } = Astro.props;
 ---
 
@@ -27,160 +29,15 @@ const { registry } = Astro.props;
 			></div>
 		</div>
 		<div id="search-icon" class="absolute right-3 top-1/2 -translate-y-1/2">
-			<svg
-				class="w-4 h-4 text-neutral-400 dark:text-neutral-500"
-				fill="none"
-				stroke="currentColor"
-				viewBox="0 0 24 24"
-			>
-				<path
-					stroke-linecap="round"
-					stroke-linejoin="round"
-					stroke-width="2"
-					d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
-				/>
-			</svg>
+			<SearchIcon class="w-4 h-4 text-neutral-400 dark:text-neutral-500"/>
 		</div>
 
 		<!-- Search Results Dropdown -->
 		<div
 			id="search-results"
 			class="absolute z-50 w-full mt-1 bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-700 rounded-lg shadow-lg overflow-hidden max-h-80 overflow-y-auto hidden"
-		></div>
+		/>
 	</div>
 </div>
 
-<script>
-	import { searchPackages } from "../../registries/searchService.ts";
-	import type { SearchResult } from "../../registries/types.ts";
-
-	function initPackageSearch() {
-		const input = document.getElementById("package-search") as HTMLInputElement;
-		const resultsDropdown = document.getElementById("search-results");
-		const loadingIcon = document.getElementById("search-loading");
-		const searchIcon = document.getElementById("search-icon");
-
-		if (!input) return;
-
-		let searchTimeout: ReturnType<typeof setTimeout>;
-		let currentResults: SearchResult[] = [];
-		let selectedIndex = -1;
-
-		function showLoading(show: boolean) {
-			loadingIcon?.classList.toggle("hidden", !show);
-			searchIcon?.classList.toggle("hidden", show);
-		}
-
-		function renderResults(results: SearchResult[]) {
-			if (!resultsDropdown) return;
-			if (results.length === 0) {
-				hideResults();
-				return;
-			}
-
-			resultsDropdown.innerHTML = results
-				.map(
-					(r, i) => `
-            <div class="search-item px-4 py-2.5 cursor-pointer hover:bg-neutral-50 dark:hover:bg-neutral-700 transition-colors" data-index="${i}" data-name="${r.name}">
-                <div class="font-medium text-sm text-neutral-900 dark:text-white">${r.name}</div>
-                ${r.description ? `<p class="text-xs text-neutral-600 dark:text-neutral-400 mt-0.5 truncate">${r.description}</p>` : ""}
-            </div>
-        `,
-				)
-				.join("");
-			resultsDropdown.classList.remove("hidden");
-			selectedIndex = -1;
-		}
-
-		function hideResults() {
-			resultsDropdown?.classList.add("hidden");
-		}
-
-		function selectPackage(name: string) {
-			input.value = name;
-			hideResults();
-			window.dispatchEvent(
-				new CustomEvent("package-selected", { detail: { name } }),
-			);
-		}
-
-		// Search input handler
-		input.addEventListener("input", (e) => {
-			const query = (e.target as HTMLInputElement).value;
-			clearTimeout(searchTimeout);
-			if (query.length < 2) {
-				hideResults();
-				return;
-			}
-
-			searchTimeout = setTimeout(async () => {
-				showLoading(true);
-				try {
-					currentResults = await searchPackages(query);
-					renderResults(currentResults);
-				} catch (e) {
-					console.error(e);
-				} finally {
-					showLoading(false);
-				}
-			}, 300);
-		});
-
-		// Click handler
-		resultsDropdown?.addEventListener("click", (e) => {
-			const item = (e.target as HTMLElement).closest(
-				".search-item",
-			) as HTMLElement;
-			if (item) {
-				const name = item.dataset.name;
-				if (name) selectPackage(name);
-			}
-		});
-
-		// Keyboard navigation
-		input.addEventListener("keydown", (e) => {
-			if (resultsDropdown?.classList.contains("hidden")) return;
-
-			const items = resultsDropdown?.querySelectorAll(".search-item");
-			if (!items?.length) return;
-
-			if (e.key === "ArrowDown") {
-				e.preventDefault();
-				selectedIndex = (selectedIndex + 1) % items.length;
-				updateHighlight(items);
-			} else if (e.key === "ArrowUp") {
-				e.preventDefault();
-				selectedIndex = (selectedIndex - 1 + items.length) % items.length;
-				updateHighlight(items);
-			} else if (e.key === "Enter") {
-				e.preventDefault();
-				if (selectedIndex >= 0) {
-					const name = (items[selectedIndex] as HTMLElement).dataset.name;
-					if (name) selectPackage(name);
-				}
-			} else if (e.key === "Escape") {
-				hideResults();
-			}
-		});
-
-		function updateHighlight(items: NodeListOf<Element>) {
-			items.forEach((item, i) => {
-				item.classList.toggle("bg-blue-50", i === selectedIndex);
-				item.classList.toggle("dark:bg-neutral-800", i === selectedIndex);
-			});
-		}
-
-		// Close dropdown on click outside
-		document.addEventListener("click", (e) => {
-			if (
-				!input?.contains(e.target as Node) &&
-				!resultsDropdown?.contains(e.target as Node)
-			) {
-				hideResults();
-			}
-		});
-	}
-
-	initPackageSearch();
-	document.addEventListener("astro:page-load", initPackageSearch);
-</script>
+<script></script>
