@@ -4,7 +4,7 @@
 	"version": "0.0.1",
 	"scripts": {
 		"dev": "astro dev",
-		"build": "bun run build:wasm && astro build",
+		"build": "astro build",
 		"build:wasm": "cd wasm/diff-wasm && wasm-pack build --target web",
 		"preview": "astro build && astro preview",
 		"astro": "astro",
