@@ -253,6 +253,17 @@ import TreeList from "./TreeList.astro";
 		}
 	});
 
+	window.addEventListener("prefetch-diff", (e) => {
+		const customEvent = e as CustomEvent<StartDiffDetail>;
+		const detail = customEvent.detail;
+		const { pkg, from, to } = detail;
+		const state = parseUrl(window.location.pathname);
+		const registry = detail.registry || state.registry;
+		if (pkg && from && to && diffWorker) {
+			diffWorker.postMessage({ type: "prefetch", registry, pkg, from, to });
+		}
+	});
+
 	window.addEventListener("popstate", () => {
 		const state = parseUrl(window.location.pathname);
 		if (state.file !== selectedFilePath) {

@@ -46,6 +46,13 @@ type WorkerRequest =
 			to: string;
 	  }
 	| {
+			type: "prefetch";
+			registry: string;
+			pkg: string;
+			from: string;
+			to: string;
+	  }
+	| {
 			type: "get-diff";
 			filename: string;
 			fromContent?: string;
@@ -58,6 +65,39 @@ export type FileMapEntry = {
 };
 
 const decoder = new TextDecoder();
+
+const extractionCache = new Map<string, Promise<Record<string, FileMapEntry>>>();
+
+async function getExtractedPackage(
+	registry: string,
+	pkg: string,
+	version: string,
+): Promise<Record<string, FileMapEntry>> {
+	const cacheKey = `${registry}:${pkg}:${version}`;
+	const cached = extractionCache.get(cacheKey);
+	if (cached) return cached;
+
+	const promise = (async () => {
+		const registryImpl = registries[registry];
+		if (!registryImpl) {
+			throw new Error(`Unsupported registry: ${registry}`);
+		}
+
+		const tarball = await registryImpl.getPackage(pkg, version);
+		return extractTarball(tarball);
+	})();
+
+	extractionCache.set(cacheKey, promise);
+
+	// Remove from cache on failure so it can be retried
+	promise.catch(() => {
+		if (extractionCache.get(cacheKey) === promise) {
+			extractionCache.delete(cacheKey);
+		}
+	});
+
+	return promise;
+}
 
 self.onmessage = async (event: MessageEvent<WorkerRequest>) => {
 	try {
@@ -73,6 +113,8 @@ self.onmessage = async (event: MessageEvent<WorkerRequest>) => {
 
 	if (data.type === "start-diff") {
 		await handleStartDiff(data.registry, data.pkg, data.from, data.to);
+	} else if (data.type === "prefetch") {
+		await handlePrefetch(data.registry, data.pkg, data.from, data.to);
 	} else if (data.type === "get-diff") {
 		handleGetDiff(data.filename, data.fromContent, data.toContent);
 	}
@@ -85,19 +127,9 @@ async function handleStartDiff(
 	to: string,
 ) {
 	try {
-		const registryImpl = registries[registry];
-		if (!registryImpl) {
-			throw new Error(`Unsupported registry: ${registry}`);
-		}
-
-		const [fromTarball, toTarball] = await Promise.all([
-			registryImpl.getPackage(pkg, from),
-			registryImpl.getPackage(pkg, to),
-		]);
-
 		const [fromFiles, toFiles] = await Promise.all([
-			extractTarball(fromTarball),
-			extractTarball(toTarball),
+			getExtractedPackage(registry, pkg, from),
+			getExtractedPackage(registry, pkg, to),
 		]);
 
 		const diffTree = buildDiffTree(fromFiles, toFiles);
@@ -111,6 +143,22 @@ async function handleStartDiff(
 	} catch (error) {
 		const message = error instanceof Error ? error.message : "Unknown error";
 		postMessage({ type: "error", error: message });
+	}
+}
+
+async function handlePrefetch(
+	registry: string,
+	pkg: string,
+	from: string,
+	to: string,
+) {
+	try {
+		await Promise.all([
+			getExtractedPackage(registry, pkg, from),
+			getExtractedPackage(registry, pkg, to),
+		]);
+	} catch (error) {
+		console.error("Prefetch failed:", error);
 	}
 }
 

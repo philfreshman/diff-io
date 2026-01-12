@@ -77,7 +77,8 @@ const currentGradient = registryGradients[registry] || "";
 		if (!input || !fromSelect || !toSelect || !compareBtn) return;
 
 		function updateCompareButton() {
-			compareBtn.disabled = !input.value || !fromSelect.value || !toSelect.value;
+			compareBtn.disabled =
+				!input.value || !fromSelect.value || !toSelect.value;
 		}
 
 		function getUrlState() {
@@ -85,22 +86,48 @@ const currentGradient = registryGradients[registry] || "";
 		}
 
 		// Compare button handler
-		compareBtn.addEventListener("click", () => {
-			const state = getUrlState();
-			window.dispatchEvent(
-				new CustomEvent("start-diff", {
-					detail: {
-						registry: state.registry,
-						pkg: input.value,
-						from: fromSelect.value,
-						to: toSelect.value,
-					},
-				}),
-			);
-		}, { signal });
+		compareBtn.addEventListener(
+			"click",
+			() => {
+				const state = getUrlState();
+				window.dispatchEvent(
+					new CustomEvent("start-diff", {
+						detail: {
+							registry: state.registry,
+							pkg: input.value,
+							from: fromSelect.value,
+							to: toSelect.value,
+						},
+					}),
+				);
+			},
+			{ signal },
+		);
+
+		// Prefetch on hover
+		compareBtn.addEventListener(
+			"mouseenter",
+			() => {
+				if (compareBtn.disabled) return;
+				const state = getUrlState();
+				window.dispatchEvent(
+					new CustomEvent("prefetch-diff", {
+						detail: {
+							registry: state.registry,
+							pkg: input.value,
+							from: fromSelect.value,
+							to: toSelect.value,
+						},
+					}),
+				);
+			},
+			{ signal },
+		);
 
 		// Update button state on changes
-		window.addEventListener("package-selected", updateCompareButton, { signal });
+		window.addEventListener("package-selected", updateCompareButton, {
+			signal,
+		});
 		window.addEventListener("versions-loaded", updateCompareButton, { signal });
 		window.addEventListener("version-changed", updateCompareButton, { signal });
 
