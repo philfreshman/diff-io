@@ -66,7 +66,10 @@ export type FileMapEntry = {
 
 const decoder = new TextDecoder();
 
-const extractionCache = new Map<string, Promise<Record<string, FileMapEntry>>>();
+const extractionCache = new Map<
+	string,
+	Promise<Record<string, FileMapEntry>>
+>();
 
 async function getExtractedPackage(
 	registry: string,
@@ -224,6 +227,40 @@ export function parseTar(buffer: ArrayBuffer): Record<string, FileMapEntry> {
 			}
 		}
 	});
+
+	return stripCommonRoot(files);
+}
+
+export function stripCommonRoot(
+	files: Record<string, FileMapEntry>,
+): Record<string, FileMapEntry> {
+	const paths = Object.keys(files);
+	if (paths.length === 0) return files;
+
+	const topLevel = new Set<string>();
+	for (const path of paths) {
+		const firstPart = path.split("/")[0];
+		topLevel.add(firstPart);
+	}
+
+	if (topLevel.size === 1) {
+		const root = topLevel.values().next().value;
+		if (root && files[root]?.type === "directory") {
+			const newFiles: Record<string, FileMapEntry> = {};
+			let hasFiles = false;
+			for (const path of paths) {
+				if (path === root) continue;
+				const newPath = path.slice(root.length + 1);
+				if (newPath) {
+					newFiles[newPath] = files[path];
+					hasFiles = true;
+				}
+			}
+			if (hasFiles) {
+				return newFiles;
+			}
+		}
+	}
 
 	return files;
 }
