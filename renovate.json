@@ -1,6 +1,20 @@
 {
-  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
-  "extends": [
-    "config:recommended"
-  ]
+	"$schema": "https://docs.renovatebot.com/renovate-schema.json",
+	"extends": [
+		"config:recommended"
+	],
+	"prBodyColumns": ["Package", "Diffpack", "Age", "Confidence"],
+	"prBodyDefinitions": {
+		"Diffpack": "[{{{currentVersion}}} → {{{newVersion}}}](https://www.diffpack.io/{{{datasource}}}/{{{depName}}}/{{{currentVersion}}}/{{{newVersion}}})"
+	},
+	"packageRules": [
+		{
+			"labels": [
+				"dependency-updates"
+			],
+			"prBodyNotes": [
+				"- [ ] [{{{packageName}}} {{{currentVersion}}} → {{{newVersion}}}](https://www.diffpack.io/{{{datasource}}}/{{{packageName}}}/{{{currentVersion}}}/{{{newVersion}}})"
+			]
+		}
+	]
 }
