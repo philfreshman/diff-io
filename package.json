@@ -12,7 +12,7 @@
 	},
 	"dependencies": {
 		"@vercel/analytics": "^1.6.1",
-		"astro": "5.16.13",
+		"astro": "5.16.14",
 		"prism-themes": "^1.9.0",
 		"prismjs": "^1.30.0",
 		"zod": "4.3.5"
