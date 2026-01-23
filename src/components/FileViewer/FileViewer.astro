@@ -345,7 +345,7 @@ import Toolbar from "./Toolbar.astro";
 		diffFilename.textContent = filename;
 
 		currentIsDiff = isDiff;
-		currentLang = isDiff ? "diff" : getLanguageFromFilename(filename);
+		currentLang = getLanguageFromFilename(filename);
 		currentPrismLang =
 			(Prism.languages[currentLang] as Prism.Grammar) || Prism.languages.clike;
 
@@ -514,17 +514,33 @@ import Toolbar from "./Toolbar.astro";
 			newNumCell.textContent = newNum?.toString() || "";
 		}
 
-		contentCell.innerHTML = Prism.highlight(
-			line || " ",
-			currentIsDiff
-				? Prism.languages.diff
-				: (currentPrismLang as Prism.Grammar),
-			currentLang,
-		);
+		const displayLine =
+			currentIsDiff && type !== "hunk" ? stripDiffPrefix(line) : line;
+
+		if (type === "hunk") {
+			contentCell.textContent = line;
+		} else {
+			contentCell.innerHTML = Prism.highlight(
+				displayLine || " ",
+				currentPrismLang as Prism.Grammar,
+				currentLang,
+			);
+		}
 		row.appendChild(oldNumCell);
 		row.appendChild(newNumCell);
 		row.appendChild(contentCell);
 		return row;
+	}
+
+	function stripDiffPrefix(line: string) {
+		if (
+			line.startsWith("+") ||
+			line.startsWith("-") ||
+			line.startsWith(" ")
+		) {
+			return line.slice(1);
+		}
+		return line;
 	}
 
 	function createCollapsedRow(start: number, end: number) {
