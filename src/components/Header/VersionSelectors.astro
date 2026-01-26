@@ -133,6 +133,22 @@
 			}
 		}
 
+		function resetVersions() {
+			allVersions = [];
+			fromSelectedIndex = -1;
+			toSelectedIndex = -1;
+			fromInput.value = "";
+			toInput.value = "";
+			fromInput.disabled = true;
+			toInput.disabled = true;
+			fromInput.placeholder = "Select version";
+			toInput.placeholder = "Select version";
+			fromResults.classList.add("hidden");
+			toResults.classList.add("hidden");
+			updateUrl("", "", "");
+			window.dispatchEvent(new CustomEvent("version-changed"));
+		}
+
 		async function loadVersions(packageName: string) {
 			fromInput.disabled = true;
 			toInput.disabled = true;
@@ -303,6 +319,8 @@
 			},
 			{ signal },
 		);
+
+		window.addEventListener("package-reset", resetVersions, { signal });
 	}
 
 	initVersionSelectors();
