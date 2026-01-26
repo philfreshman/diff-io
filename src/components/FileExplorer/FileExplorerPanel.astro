@@ -4,11 +4,29 @@ import TreeFilter from "./TreeFilter.astro";
 import TreeList from "./TreeList.astro";
 ---
 
+<script is:inline>
+	(() => {
+		const storageKey = "tree_panel_width";
+		const defaultWidth = 320;
+		const minWidth = 220;
+		const maxWidth = 640;
+		const savedWidth = localStorage.getItem(storageKey);
+		const parsed = savedWidth ? Number.parseInt(savedWidth, 10) : NaN;
+		const width = Number.isNaN(parsed)
+			? defaultWidth
+			: Math.min(maxWidth, Math.max(minWidth, parsed));
+		document.documentElement.style.setProperty(
+			"--tree-panel-width",
+			`${width}px`,
+		);
+	})();
+</script>
+
 <div class="bg-neutral-50 dark:bg-neutral-950 h-full" id="tree-root">
 	<div
 		class="h-full bg-white dark:bg-neutral-900 border-r border-neutral-200 dark:border-neutral-800 p-4 relative flex flex-col"
 		id="tree-panel"
-		style="width: 320px;"
+		style="width: var(--tree-panel-width, 320px);"
 	>
 		<TreeFilter/>
 		<TreeList/>
