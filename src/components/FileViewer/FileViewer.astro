@@ -34,6 +34,7 @@ import Toolbar from "./Toolbar.astro";
 	let scrollbarMarkers = document.getElementById("scrollbar-markers");
 
 	const scrollPositions = new Map<string, number>();
+	const expandedLineStates = new Map<string, Set<number>>();
 	let currentFilename = "";
 	let scrollbarHideTimeout: ReturnType<typeof setTimeout> | null = null;
 	let isDragging = false;
@@ -255,6 +256,7 @@ import Toolbar from "./Toolbar.astro";
 
 	function resetDiff() {
 		scrollPositions.clear();
+		expandedLineStates.clear();
 		currentFilename = "";
 		diffContainer?.classList.add("hidden");
 		if (diffFilename) diffFilename.textContent = "";
@@ -292,6 +294,7 @@ import Toolbar from "./Toolbar.astro";
 	function showDiff(filename: string, diff: string, isDiff = true) {
 		if (!diffContainer || !diffFilename || !diffContent) return;
 
+		saveExpandedState();
 		scrollPositions.set(currentFilename, diffContent.scrollTop);
 		currentFilename = filename;
 
@@ -380,6 +383,7 @@ import Toolbar from "./Toolbar.astro";
 			languageBadge.classList.remove("hidden");
 		}
 
+		applyExpandedState(filename);
 		renderDiffContent();
 
 		if (diffContent) {
@@ -434,6 +438,37 @@ import Toolbar from "./Toolbar.astro";
 
 		updateScrollbarThumb();
 		renderMarkers();
+	}
+
+	function saveExpandedState() {
+		if (!currentFilename || currentProcessedLines.length === 0) return;
+		const expanded = new Set<number>();
+		currentProcessedLines.forEach((line, index) => {
+			if (line.forceVisible) expanded.add(index);
+		});
+		if (expanded.size > 0) {
+			expandedLineStates.set(currentFilename, expanded);
+		} else {
+			expandedLineStates.delete(currentFilename);
+		}
+	}
+
+	function applyExpandedState(filename: string) {
+		const expanded = expandedLineStates.get(filename);
+		if (!expanded) return;
+		expanded.forEach((index) => {
+			if (currentProcessedLines[index]) {
+				currentProcessedLines[index].forceVisible = true;
+			}
+		});
+	}
+
+	function markForceVisibleRange(start: number, end: number) {
+		for (let i = start; i <= end; i++) {
+			if (currentProcessedLines[i]) {
+				currentProcessedLines[i].forceVisible = true;
+			}
+		}
 	}
 
 	function createDiffRow(lineObj: DiffLine) {
@@ -532,23 +567,17 @@ import Toolbar from "./Toolbar.astro";
 		};
 
 		const onExpandDown = () => {
-			for (let i = start; i < Math.min(start + 20, end + 1); i++) {
-				currentProcessedLines[i].forceVisible = true;
-			}
+			markForceVisibleRange(start, Math.min(start + 19, end));
 			renderDiffContent();
 		};
 
 		const onExpandUp = () => {
-			for (let i = Math.max(start, end - 19); i <= end; i++) {
-				currentProcessedLines[i].forceVisible = true;
-			}
+			markForceVisibleRange(Math.max(start, end - 19), end);
 			renderDiffContent();
 		};
 
 		const onExpandAll = () => {
-			for (let i = start; i <= end; i++) {
-				currentProcessedLines[i].forceVisible = true;
-			}
+			markForceVisibleRange(start, end);
 			renderDiffContent();
 		};
 
@@ -583,6 +612,7 @@ import Toolbar from "./Toolbar.astro";
 
 	window.addEventListener("start-diff", resetDiff);
 	window.addEventListener("expand-all-diff", () => {
+		markForceVisibleRange(0, currentProcessedLines.length - 1);
 		renderDiffContent(true);
 	});
 	window.addEventListener("file-diff", (e) => {
