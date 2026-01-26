@@ -1,43 +1,38 @@
 <div class="flex items-center gap-2">
 	<label
-		for="prism-theme"
+		for="highlight-theme"
 		class="text-xs text-neutral-500 dark:text-neutral-400"
 	>
 		Theme:
 	</label>
 	<select
-		id="prism-theme"
+		id="highlight-theme"
 		class="text-xs bg-transparent border-none focus:ring-0 text-neutral-700 dark:text-neutral-300 cursor-pointer"
 	>
-		<optgroup label="Standard Themes">
-			<option value="prism">Default</option>
-			<option value="prism-dark">Dark</option>
-			<option value="prism-okaidia">Okaidia</option>
-			<option value="prism-solarizedlight">Solarized Light</option>
-			<option value="prism-tomorrow">Tomorrow Night</option>
-			<option value="prism-twilight">Twilight</option>
-		</optgroup>
-		<optgroup label="Prism Themes Repo">
-			<option value="atom-dark">Atom Dark</option>
-			<option value="cb">CB</option>
-			<option value="dracula">Dracula</option>
-			<option value="duotone-dark">Duotone Dark</option>
-			<option value="duotone-earth">Duotone Earth</option>
-			<option value="duotone-forest">Duotone Forest</option>
-			<option value="duotone-light">Duotone Light</option>
-			<option value="duotone-sea">Duotone Sea</option>
-			<option value="duotone-space">Duotone Space</option>
-			<option value="ghcolors">GitHub Colors</option>
-			<option value="material-dark">Material Dark</option>
-			<option value="material-light">Material Light</option>
-			<option value="material-oceanic">Material Oceanic</option>
+		<optgroup label="Highlight.js Themes">
+			<option value="base16/3024">3024</option>
+			<option value="atom-one-dark">Atom One Dark</option>
+			<option value="atom-one-light">Atom One Light</option>
+			<option value="default">Default</option>
+			<option value="base16/dracula">Dracula</option>
+			<option value="base16/github">GitHub</option>
+			<option value="github-dark">GitHub Dark</option>
+			<option value="github-dark-dimmed">GitHub Dark Dimmed</option>
+			<option value="material">Material</option>
+			<option value="monokai">Monokai</option>
+			<option value="monokai-sublime">Monokai Sublime</option>
 			<option value="night-owl">Night Owl</option>
+			<option value="nightfall">Nightfall</option>
 			<option value="nord">Nord</option>
-			<option value="shades-of-purple">Shades of Purple</option>
-			<option value="synthwave84">Synthwave 84</option>
+			<option value="onedark">One Dark</option>
+			<option value="stackoverflow-dark">Stack Overflow Dark</option>
+			<option value="stackoverflow-light">Stack Overflow Light</option>
+			<option value="solarized-light">Solarized Light</option>
+			<option value="solarized-dark">Solarized Dark</option>
+			<option value="tokyo-night-dark">Tokyo Night Dark</option>
 			<option value="vs">VS</option>
-			<option value="vsc-dark-plus">VSC Dark Plus</option>
-			<option value="xonokai">Xonokai</option>
+			<option value="vs2015">VS 2015</option>
+			<option value="windows-95">Windows 95</option>
 		</optgroup>
 	</select>
 </div>
@@ -45,63 +40,71 @@
 <script>
 	function initThemeSelect() {
 		const themeSelect = document.getElementById(
-			"prism-theme",
+			"highlight-theme",
 		) as HTMLSelectElement;
 
 		let themeStyle = document.getElementById(
-			"prism-theme-style",
+			"highlight-theme-style",
 		) as HTMLStyleElement;
 
 		if (!themeStyle) {
 			themeStyle = document.createElement("style");
-			themeStyle.id = "prism-theme-style";
+			themeStyle.id = "highlight-theme-style";
 			document.head.appendChild(themeStyle);
 		}
 
-		const THEME_STORAGE_KEY = "prism_theme";
+		const THEME_STORAGE_KEY = "highlight_theme";
 
-		// Load saved theme
-		const savedTheme = localStorage.getItem(THEME_STORAGE_KEY) || "prism";
-		if (themeSelect) themeSelect.value = savedTheme;
-		updatePrismTheme(savedTheme, themeStyle);
+		// Load saved theme or fall back to page theme
+		const savedTheme = localStorage.getItem(THEME_STORAGE_KEY);
+		const pageTheme = document.documentElement.getAttribute("data-theme");
+		const defaultTheme = pageTheme === "dark" ? "github-dark" : "github";
+		const initialTheme = savedTheme || defaultTheme;
+		if (themeSelect) themeSelect.value = initialTheme;
+		updateHighlightTheme(initialTheme, themeStyle);
 
 		themeSelect?.addEventListener("change", (e) => {
 			const theme = (e.target as HTMLSelectElement).value;
 			localStorage.setItem(THEME_STORAGE_KEY, theme);
-			updatePrismTheme(theme, themeStyle);
+			updateHighlightTheme(theme, themeStyle);
 		});
 	}
 
-	async function updatePrismTheme(theme: string, themeStyle: HTMLStyleElement) {
-		const isStandardTheme = [
-			"prism",
-			"prism-dark",
-			"prism-okaidia",
-			"prism-solarizedlight",
-			"prism-tomorrow",
-			"prism-twilight",
-		].includes(theme);
+	async function updateHighlightTheme(
+		theme: string,
+		themeStyle: HTMLStyleElement,
+	) {
+		// Custom theme handling
+		if (theme === "nightfall") {
+			const response = await fetch("/nightfall.css");
+			if (!response.ok) {
+				console.error("Theme not found: nightfall");
+				return;
+			}
+			themeStyle.textContent = await response.text();
+			return;
+		}
 
 		const themes = import.meta.glob(
-			[
-				"/node_modules/prismjs/themes/*.css",
-				"/node_modules/prism-themes/themes/*.css",
-			],
+			["/node_modules/highlight.js/styles/**/*.css"], // Added ** to search subfolders
 			{ query: "?raw", eager: true },
 		);
 
-		const themeKey = isStandardTheme
-			? `/node_modules/prismjs/themes/${theme}.css`
-			: `/node_modules/prism-themes/themes/prism-${theme}.css`;
+		// Find the key that matches the filename (e.g., "dracula.css" or "base16/dracula.css")
+		const themeKey = Object.keys(themes).find((key) =>
+			key.endsWith(`/${theme}.css`),
+		);
 
-		const cssModule = themes[themeKey] as { default: string } | undefined;
+		const cssModule = themeKey
+			? (themes[themeKey] as { default: string })
+			: undefined;
 		if (cssModule) {
 			themeStyle.textContent = cssModule.default;
 		} else {
 			console.error(`Theme not found: ${themeKey}`);
-			const defaultTheme = themes["/node_modules/prismjs/themes/prism.css"] as
-				| { default: string }
-				| undefined;
+			const defaultTheme = themes[
+				"/node_modules/highlight.js/styles/github.css"
+			] as { default: string } | undefined;
 			if (defaultTheme) {
 				themeStyle.textContent = defaultTheme.default;
 			}

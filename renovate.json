@@ -1,9 +1,10 @@
 {
 	"$schema": "https://docs.renovatebot.com/renovate-schema.json",
 	"extends": ["config:recommended"],
-	"prBodyColumns": [" ", "Package", "Diffpack", "Age", "Confidence"],
+	"schedule": ["before 5am on the 1st and 15th day of the month"],
+	"prBodyColumns": ["Checklist", "Package", "Diffpack", "Age", "Confidence"],
 	"prBodyDefinitions": {
-		" ": "<ul><li>- [ ] </li></ul>",
+		"Checklist": "- [ ]",
 		"Diffpack": "[{{{currentVersion}}} → {{{newVersion}}}](https://www.diffpack.io/{{{datasource}}}/{{{depName}}}/{{{currentVersion}}}/{{{newVersion}}})"
 	},
 	"packageRules": [

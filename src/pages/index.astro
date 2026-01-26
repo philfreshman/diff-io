@@ -1,6 +1,6 @@
 ---
-import ThemeIcon from "../components/Header/ThemeIcon.astro";
 import BaseHead from "../components/BaseHead.astro";
+import ThemeIcon from "../components/Header/ThemeIcon.astro";
 
 const title = "diffpack - Compare package versions across ecosystems";
 const description = "Compare package versions across ecosystems. Clean. Fast. Source-aware dependency review tool for npm and crates.io.";
@@ -41,8 +41,9 @@ const tiles = [
 				>
 					diffpack
 				</h1>
-				<p class="mt-4 text-neutral-600 dark:text-neutral-400 max-w-md">
-					Compare package versions across ecosystems. Clean. Fast. Source-aware.
+				<p class="mt-4 max-w-md whitespace-pre-line text-neutral-600 dark:text-neutral-400">
+					Compare package versions across ecosystems.
+					Clean. Fast. Source-aware.
 				</p>
 			</div>
 
@@ -50,10 +51,10 @@ const tiles = [
 				{tiles.map((tile) => (
 				<a
 					href={tile.href}
-					class="group relative rounded-2xl p-[1px] transition-transform duration-300 hover:scale-[1.02]"
+					class="group relative rounded-2xl p-px transition-transform duration-300 hover:scale-[1.02]"
 				>
 					<div
-						class={`absolute -inset-1 rounded-2xl bg-gradient-to-r ${tile.glow} blur-xl opacity-0 transition-opacity duration-300 group-hover:opacity-100`}
+						class={`absolute -inset-1 rounded-2xl bg-linear-to-r ${tile.glow} blur-xl opacity-0 transition-opacity duration-300 group-hover:opacity-100`}
 					/>
 
 					<div
