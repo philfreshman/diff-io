@@ -132,7 +132,7 @@ import Toolbar from "./Toolbar.astro";
 			"bg-[#dbedff] border-r-[#c8e1ff] flex flex-col items-center justify-center p-0 gap-0 w-[calc(2*var(--line-number-width))] min-w-[calc(2*var(--line-number-width))] flex-shrink-0 dark:bg-[#263449] dark:border-r-[#38444d]",
 		content: "px-3 flex-1 hljs",
 		contentCollapsed:
-			"flex items-center bg-[#f1f8ff] text-neutral-500 italic h-10 dark:bg-[#1e2836] dark:text-neutral-400",
+			"flex items-center bg-[#f1f8ff] text-neutral-500 italic h-10 dark:bg-[#1e2836] dark:text-neutral-400 w-full",
 	};
 
 	function updateScrollbarThumb() {
@@ -495,11 +495,7 @@ import Toolbar from "./Toolbar.astro";
 	}
 
 	function stripDiffPrefix(line: string) {
-		if (
-			line.startsWith("+") ||
-			line.startsWith("-") ||
-			line.startsWith(" ")
-		) {
+		if (line.startsWith("+") || line.startsWith("-") || line.startsWith(" ")) {
 			return line.slice(1);
 		}
 		return line;
@@ -512,7 +508,7 @@ import Toolbar from "./Toolbar.astro";
 		const expanderCell = document.createElement("div");
 		expanderCell.className = CLASSES.lineNumberCollapsed;
 		const contentCell = document.createElement("div");
-		contentCell.className = `${CLASSES.content} ${CLASSES.contentCollapsed}`;
+		contentCell.className = `${CLASSES.contentCollapsed}`;
 
 		const count = end - start + 1;
 		contentCell.textContent = `@@ Collapsed ${count} lines @@`;
