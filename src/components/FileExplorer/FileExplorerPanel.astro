@@ -47,6 +47,7 @@ import TreeList from "./TreeList.astro";
 	}
 
 	const STORAGE_KEY = "tree_panel_width";
+	const MODIFIED_STORAGE_KEY = "tree_show_only_modified";
 	const DEFAULT_WIDTH = 320;
 	const MIN_WIDTH = 220;
 	const MAX_WIDTH = 640;
@@ -146,6 +147,11 @@ import TreeList from "./TreeList.astro";
 			}
 		}
 
+		const savedShowOnlyModified = localStorage.getItem(MODIFIED_STORAGE_KEY);
+		if (savedShowOnlyModified !== null) {
+			showOnlyModified = savedShowOnlyModified !== "false";
+		}
+
 		if (diffWorker) {
 			diffWorker.terminate();
 		}
@@ -232,6 +238,10 @@ import TreeList from "./TreeList.astro";
 		toggleModifiedBtn?.addEventListener("click", () => {
 			if (!toggleModifiedBtn) return;
 			showOnlyModified = !showOnlyModified;
+			localStorage.setItem(
+				MODIFIED_STORAGE_KEY,
+				showOnlyModified.toString(),
+			);
 			collapsedKeys.clear();
 			if (!showOnlyModified) {
 				toggleModifiedBtn.classList.add(

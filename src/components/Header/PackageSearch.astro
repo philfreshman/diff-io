@@ -1,4 +1,5 @@
 ---
+import ResetIcon from "../Icons/ResetIcon.astro";
 import SearchIcon from "../Icons/SearchIcon.astro";
 
 const { registry } = Astro.props;
@@ -31,6 +32,14 @@ const { registry } = Astro.props;
 		<div id="search-icon" class="absolute right-3 top-1/2 -translate-y-1/2">
 			<SearchIcon class="w-4 h-4 text-neutral-400 dark:text-neutral-500"/>
 		</div>
+		<button
+			id="search-reset"
+			type="button"
+			class="absolute right-3 top-1/2 -translate-y-1/2 hidden"
+			aria-label="Reset search"
+		>
+			<ResetIcon class="w-4 h-4 text-neutral-400 hover:text-neutral-600 dark:text-neutral-500 dark:hover:text-neutral-300"/>
+		</button>
 
 		<!-- Search Results Dropdown -->
 		<div
@@ -56,16 +65,33 @@ const { registry } = Astro.props;
 		const resultsDropdown = document.getElementById("search-results");
 		const loadingIcon = document.getElementById("search-loading");
 		const searchIcon = document.getElementById("search-icon");
+		const resetButton = document.getElementById("search-reset");
 
 		if (!input) return;
 
 		let searchTimeout: ReturnType<typeof setTimeout>;
 		let currentResults: SearchResult[] = [];
 		let selectedIndex = -1;
+		let selectedPackage: string | null = null;
+		let isLoading = false;
+
+		function updateActionIcon() {
+			if (isLoading) {
+				loadingIcon?.classList.remove("hidden");
+				searchIcon?.classList.add("hidden");
+				resetButton?.classList.add("hidden");
+				return;
+			}
+
+			loadingIcon?.classList.add("hidden");
+			const showReset = Boolean(selectedPackage);
+			resetButton?.classList.toggle("hidden", !showReset);
+			searchIcon?.classList.toggle("hidden", showReset);
+		}
 
 		function showLoading(show: boolean) {
-			loadingIcon?.classList.toggle("hidden", !show);
-			searchIcon?.classList.toggle("hidden", show);
+			isLoading = show;
+			updateActionIcon();
 		}
 
 		function renderResults(results: SearchResult[]) {
@@ -97,10 +123,22 @@ const { registry } = Astro.props;
 
 		function selectPackage(name: string) {
 			input.value = name;
+			selectedPackage = name;
+			updateActionIcon();
 			hideResults();
 			window.dispatchEvent(
 				new CustomEvent("package-selected", { detail: { name } }),
 			);
+		}
+
+		function resetSearch() {
+			selectedPackage = null;
+			currentResults = [];
+			input.value = "";
+			hideResults();
+			updateActionIcon();
+			window.dispatchEvent(new CustomEvent("package-reset"));
+			input.focus();
 		}
 
 		// Search input handler
@@ -109,6 +147,10 @@ const { registry } = Astro.props;
 			(e) => {
 				const query = (e.target as HTMLInputElement).value;
 				clearTimeout(searchTimeout);
+				if (selectedPackage && query !== selectedPackage) {
+					selectedPackage = null;
+					updateActionIcon();
+				}
 				if (query.length < 2) {
 					hideResults();
 					return;
@@ -128,6 +170,8 @@ const { registry } = Astro.props;
 			},
 			{ signal },
 		);
+
+		resetButton?.addEventListener("click", resetSearch, { signal });
 
 		// Click handler
 		resultsDropdown?.addEventListener(
@@ -194,6 +238,25 @@ const { registry } = Astro.props;
 			},
 			{ signal },
 		);
+
+		window.addEventListener(
+			"package-selected",
+			(e: Event) => {
+				const detail = (e as CustomEvent).detail;
+				if (detail?.name) {
+					selectedPackage = detail.name;
+					updateActionIcon();
+				}
+			},
+			{ signal },
+		);
+
+		if (input.value) {
+			selectedPackage = input.value;
+			updateActionIcon();
+		} else {
+			updateActionIcon();
+		}
 	}
 
 	initPackageSearch();

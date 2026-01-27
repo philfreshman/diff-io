@@ -23,4 +23,30 @@ import SearchIcon from "../Icons/SearchIcon.astro";
 	>
 		<FilterIcon class="m-0.5 w-4 h-4"/>
 	</button>
+	<script is:inline>
+		(() => {
+			const toggleButton = document.getElementById("toggle-modified");
+			if (!toggleButton) return;
+
+			const storedValue = localStorage.getItem("tree_show_only_modified");
+			const showOnlyModified =
+				storedValue === null ? true : storedValue !== "false";
+
+			if (showOnlyModified) {
+				toggleButton.classList.add(
+					"text-neutral-400",
+					"dark:text-neutral-500",
+				);
+			} else {
+				toggleButton.classList.add(
+					"bg-blue-50",
+					"text-blue-600",
+					"border-blue-200",
+					"dark:bg-blue-900/20",
+					"dark:text-blue-400",
+					"dark:border-blue-800",
+				);
+			}
+		})();
+	</script>
 </div>

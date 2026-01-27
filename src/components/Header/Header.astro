@@ -128,6 +128,7 @@ const currentGradient = registryGradients[registry] || "";
 		window.addEventListener("package-selected", updateCompareButton, {
 			signal,
 		});
+		window.addEventListener("package-reset", updateCompareButton, { signal });
 		window.addEventListener("versions-loaded", updateCompareButton, { signal });
 		window.addEventListener("version-changed", updateCompareButton, { signal });
 

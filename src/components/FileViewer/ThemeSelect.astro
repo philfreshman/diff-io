@@ -35,6 +35,21 @@
 			<option value="windows-95">Windows 95</option>
 		</optgroup>
 	</select>
+	<script is:inline>
+		(() => {
+			const themeSelect = document.getElementById("highlight-theme");
+			if (!(themeSelect instanceof HTMLSelectElement)) return;
+
+			const savedTheme = localStorage.getItem("highlight_theme");
+			const pageTheme = document.documentElement.getAttribute("data-theme");
+			const defaultTheme = pageTheme === "dark" ? "github-dark" : "github";
+			const initialTheme = savedTheme || defaultTheme;
+
+			if (themeSelect.value !== initialTheme) {
+				themeSelect.value = initialTheme;
+			}
+		})();
+	</script>
 </div>
 
 <script>
