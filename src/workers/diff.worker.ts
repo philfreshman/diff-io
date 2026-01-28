@@ -1,5 +1,6 @@
 import init, {
-	count_diff,
+	build_diff_tree,
+	// count_diff,
 	get_diff_content,
 } from "../../wasm/diff-wasm/pkg/diff_wasm.js";
 import wasmUrl from "../../wasm/diff-wasm/pkg/diff_wasm_bg.wasm?url";
@@ -26,7 +27,12 @@ export async function ensureWasmInitialized() {
 	}
 }
 
-export type DiffStatus = "added" | "removed" | "modified" | "unchanged" | "renamed";
+export type DiffStatus =
+	| "added"
+	| "removed"
+	| "modified"
+	| "unchanged"
+	| "renamed";
 
 export type DiffFileEntry = {
 	path: string;
@@ -136,7 +142,11 @@ async function handleStartDiff(
 			getExtractedPackage(registry, pkg, to),
 		]);
 
-		const diffTree = buildDiffTree(fromFiles, toFiles);
+		const start = performance.now();
+		const diffTree = build_diff_tree(fromFiles, toFiles, 0.75);
+		const end = performance.now();
+
+		console.log(`build_diff_tree took ${(end - start).toFixed(2)}ms`);
 
 		postMessage({
 			type: "diff-result",
@@ -291,271 +301,6 @@ function normalizePath(path: string, isDirectory: boolean): string {
 		return trimmed.replace(/\/+$/, "");
 	}
 	return trimmed;
-}
-
-function calculateSimilarity(
-	fromContent: string,
-	toContent: string,
-): number {
-	if (fromContent === toContent) return 1;
-	if (!fromContent || !toContent) return 0;
-
-	const { added, removed } = countDiff(fromContent, toContent);
-	const fromLines = fromContent.split("\n").length;
-	const toLines = toContent.split("\n").length;
-
-	return 1 - (added + removed) / (fromLines + toLines);
-}
-
-export function buildDiffTree(
-	fromFiles: Record<string, FileMapEntry>,
-	toFiles: Record<string, FileMapEntry>,
-): DiffFileEntry {
-	const root: DiffFileEntry = {
-		path: "/",
-		type: "directory",
-		status: "unchanged",
-		children: [],
-	};
-
-	const fromPaths = new Set(Object.keys(fromFiles));
-	const toPaths = new Set(Object.keys(toFiles));
-
-	const removedPaths = [...fromPaths].filter((p) => !toPaths.has(p));
-	const addedPaths = [...toPaths].filter((p) => !fromPaths.has(p));
-
-	const renames = new Map<string, string>(); // toPath -> fromPath
-	const usedFrom = new Set<string>();
-
-	// Threshold for similarity (50% like git default)
-	const SIMILARITY_THRESHOLD = 0.5;
-
-	// 1. Find exact matches
-	for (const addedPath of addedPaths) {
-		const toEntry = toFiles[addedPath];
-		if (toEntry.type === "directory") continue;
-
-		for (const removedPath of removedPaths) {
-			if (usedFrom.has(removedPath)) continue;
-			const fromEntry = fromFiles[removedPath];
-			if (fromEntry.type === "directory") continue;
-
-			if (fromEntry.content === toEntry.content) {
-				renames.set(addedPath, removedPath);
-				usedFrom.add(removedPath);
-				fromPaths.delete(removedPath);
-				break;
-			}
-		}
-	}
-
-	// 2. Find similar matches for remaining
-	for (const addedPath of addedPaths) {
-		if (renames.has(addedPath)) continue;
-		const toEntry = toFiles[addedPath];
-		if (toEntry.type === "directory") continue;
-
-		const addedName = addedPath.split("/").pop();
-		let bestMatch: string | null = null;
-		let bestSimilarity = SIMILARITY_THRESHOLD;
-
-		for (const removedPath of removedPaths) {
-			if (usedFrom.has(removedPath)) continue;
-			const fromEntry = fromFiles[removedPath];
-			if (fromEntry.type === "directory") continue;
-
-			// Quick length check
-			const fromLen = fromEntry.content.length;
-			const toLen = toEntry.content.length;
-			const maxLen = Math.max(fromLen, toLen);
-			const minLen = Math.min(fromLen, toLen);
-			if (minLen * 2 < maxLen) continue; // Heuristic: similarity won't be > 0.5
-
-			// Prioritize same filename
-			const removedName = removedPath.split("/").pop();
-			const sameName = addedName === removedName;
-			
-			const similarity = calculateSimilarity(fromEntry.content, toEntry.content);
-			
-			// Boost similarity if same name
-			const adjustedSimilarity = sameName ? similarity * 1.2 : similarity;
-
-			if (adjustedSimilarity > bestSimilarity) {
-				bestSimilarity = adjustedSimilarity;
-				bestMatch = removedPath;
-			}
-		}
-
-		if (bestMatch) {
-			renames.set(addedPath, bestMatch);
-			usedFrom.add(bestMatch);
-			fromPaths.delete(bestMatch);
-		}
-	}
-
-	const fromDirs = collectDirectories(fromPaths);
-	const toDirs = collectDirectories(toPaths);
-
-	const allPaths = new Set<string>([
-		...fromPaths,
-		...toPaths,
-		...fromDirs,
-		...toDirs,
-	]);
-
-	const sortedPaths = Array.from(allPaths).filter(Boolean).sort();
-	for (const path of sortedPaths) {
-		const type: "file" | "directory" =
-			(fromFiles[path]?.type || toFiles[path]?.type) === "directory" ||
-			fromDirs.has(path) ||
-			toDirs.has(path)
-				? "directory"
-				: "file";
-		insertNode(root, path, type);
-	}
-
-	computeStatuses(root, fromFiles, toFiles, fromDirs, toDirs, renames);
-	return root;
-}
-
-function collectDirectories(paths: Set<string>): Set<string> {
-	const dirs = new Set<string>();
-	for (const path of paths) {
-		const segments = path.split("/");
-		for (let i = 1; i < segments.length; i++) {
-			const dir = segments.slice(0, i).join("/");
-			if (dir) dirs.add(dir);
-		}
-	}
-	return dirs;
-}
-
-function insertNode(
-	root: DiffFileEntry,
-	fullPath: string,
-	type: "file" | "directory",
-) {
-	const parts = fullPath.split("/");
-	let current = root;
-
-	for (let i = 0; i < parts.length; i++) {
-		const partPath = parts.slice(0, i + 1).join("/");
-		const isLeaf = i === parts.length - 1;
-		current.children = current.children || [];
-		let child = current.children.find((c) => c.path === partPath);
-
-		if (!child) {
-			child = {
-				path: partPath,
-				type: isLeaf ? type : "directory",
-				status: "unchanged",
-				children: [],
-			};
-			current.children.push(child);
-		}
-
-		current = child;
-	}
-}
-
-function computeStatuses(
-	node: DiffFileEntry,
-	fromFiles: Record<string, FileMapEntry>,
-	toFiles: Record<string, FileMapEntry>,
-	fromDirs: Set<string>,
-	toDirs: Set<string>,
-	renames: Map<string, string>,
-): { status: DiffStatus; added: number; removed: number } {
-	if (node.type === "file") {
-		const oldPath = renames.get(node.path);
-		if (oldPath) {
-			node.status = "renamed";
-			node.oldPath = oldPath;
-			const fromEntry = fromFiles[oldPath];
-			const toEntry = toFiles[node.path];
-			const { added, removed } = countDiff(fromEntry.content, toEntry.content);
-			node.added = added;
-			node.removed = removed;
-		} else {
-			const fromEntry = fromFiles[node.path];
-			const toEntry = toFiles[node.path];
-
-			if (fromEntry && !toEntry) {
-				node.status = "removed";
-				node.added = 0;
-				node.removed = fromEntry.content.split("\n").length;
-			} else if (!fromEntry && toEntry) {
-				node.status = "added";
-				node.added = toEntry.content.split("\n").length;
-				node.removed = 0;
-			} else if (fromEntry && toEntry) {
-				if (fromEntry.content === toEntry.content) {
-					node.status = "unchanged";
-					node.added = 0;
-					node.removed = 0;
-				} else {
-					node.status = "modified";
-					const { added, removed } = countDiff(
-						fromEntry.content,
-						toEntry.content,
-					);
-					node.added = added;
-					node.removed = removed;
-				}
-			} else {
-				node.status = "unchanged";
-				node.added = 0;
-				node.removed = 0;
-			}
-		}
-		return {
-			status: node.status,
-			added: node.added || 0,
-			removed: node.removed || 0,
-		};
-	}
-
-	const children = node.children || [];
-	const childResults = children.map((child) =>
-		computeStatuses(child, fromFiles, toFiles, fromDirs, toDirs, renames),
-	);
-
-	const inFrom = node.path === "/" || fromDirs.has(node.path);
-	const inTo = node.path === "/" || toDirs.has(node.path);
-
-	const totalAdded = childResults.reduce((acc, curr) => acc + curr.added, 0);
-	const totalRemoved = childResults.reduce(
-		(acc, curr) => acc + curr.removed,
-		0,
-	);
-	node.added = totalAdded;
-	node.removed = totalRemoved;
-
-	if (inFrom && !inTo) {
-		node.status = "removed";
-	} else if (!inFrom && inTo) {
-		node.status = "added";
-	} else if (childResults.every((res) => res.status === "unchanged")) {
-		node.status = "unchanged";
-	} else {
-		node.status = "modified";
-	}
-
-	return { status: node.status, added: node.added, removed: node.removed };
-}
-
-function countDiff(
-	from: string,
-	to: string,
-): { added: number; removed: number } {
-	const result = count_diff(from, to);
-	try {
-		const added = result.added;
-		const removed = result.removed;
-		return { added, removed };
-	} finally {
-		result.free();
-	}
 }
 
 export function handleGetDiff(
