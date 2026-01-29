@@ -20,9 +20,17 @@ export class DiffTreeBuilder {
 
 export function build_diff_tree(from_files: any, to_files: any, similarity_threshold: number): any;
 
+export function build_diff_tree_for_package(registry: string, pkg: string, from: string, to: string, similarity_threshold: number): Promise<any>;
+
 export function count_diff(from: string, to: string): DiffCounts;
 
+export function fetch_and_extract_package(registry: string, pkg: string, version: string): Promise<any>;
+
 export function get_diff_content(filename: string, from_content: string, to_content: string): string;
+
+export function get_diff_for_path(filename: string, old_path?: string | null): any;
+
+export function prefetch_package(registry: string, pkg: string, version: string): Promise<void>;
 
 export type InitInput = RequestInfo | URL | Response | BufferSource | WebAssembly.Module;
 
@@ -35,12 +43,19 @@ export interface InitOutput {
     readonly __wbg_set_diffcounts_added: (a: number, b: number) => void;
     readonly __wbg_set_diffcounts_removed: (a: number, b: number) => void;
     readonly build_diff_tree: (a: any, b: any, c: number) => [number, number, number];
+    readonly build_diff_tree_for_package: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number, i: number) => any;
     readonly count_diff: (a: number, b: number, c: number, d: number) => number;
     readonly difftreebuilder_build_tree: (a: number) => [number, number, number];
     readonly difftreebuilder_new: (a: number) => number;
     readonly difftreebuilder_set_from_files: (a: number, b: any) => [number, number];
     readonly difftreebuilder_set_to_files: (a: number, b: any) => [number, number];
+    readonly fetch_and_extract_package: (a: number, b: number, c: number, d: number, e: number, f: number) => any;
     readonly get_diff_content: (a: number, b: number, c: number, d: number, e: number, f: number) => [number, number];
+    readonly get_diff_for_path: (a: number, b: number, c: number, d: number) => [number, number, number];
+    readonly prefetch_package: (a: number, b: number, c: number, d: number, e: number, f: number) => any;
+    readonly wasm_bindgen__closure__destroy__hf610b7ce91a92bfa: (a: number, b: number) => void;
+    readonly wasm_bindgen__convert__closures_____invoke__h26d2e9b1279394f7: (a: number, b: number, c: any, d: any) => void;
+    readonly wasm_bindgen__convert__closures_____invoke__hd42d7be819e8e283: (a: number, b: number, c: any) => void;
     readonly __wbindgen_malloc: (a: number, b: number) => number;
     readonly __wbindgen_realloc: (a: number, b: number, c: number, d: number) => number;
     readonly __wbindgen_exn_store: (a: number) => void;

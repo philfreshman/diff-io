@@ -47,6 +47,10 @@ pub fn get_diff_content(filename: &str, from_content: &str, to_content: &str) ->
 pub struct DiffTreeBuilder {
     from_files: HashMap<String, FileMapEntry>,
     to_files: HashMap<String, FileMapEntry>,
+    from_file_paths: HashSet<String>,
+    to_file_paths: HashSet<String>,
+    from_dirs: HashSet<String>,
+    to_dirs: HashSet<String>,
     similarity_threshold: f64,
 }
 
@@ -55,16 +59,24 @@ impl DiffTreeBuilder {
         Self {
             from_files: HashMap::new(),
             to_files: HashMap::new(),
+            from_file_paths: HashSet::new(),
+            to_file_paths: HashSet::new(),
+            from_dirs: HashSet::new(),
+            to_dirs: HashSet::new(),
             similarity_threshold: similarity_threshold.max(0.0).min(1.0),
         }
     }
 
     pub fn set_from_files(&mut self, files: HashMap<String, FileMapEntry>) {
         self.from_files = files;
+        self.from_file_paths = self.collect_file_paths(&self.from_files);
+        self.from_dirs = self.collect_directories(&self.from_files);
     }
 
     pub fn set_to_files(&mut self, files: HashMap<String, FileMapEntry>) {
         self.to_files = files;
+        self.to_file_paths = self.collect_file_paths(&self.to_files);
+        self.to_dirs = self.collect_directories(&self.to_files);
     }
 
     pub fn build_tree(&self) -> DiffFileEntry {
@@ -72,19 +84,23 @@ impl DiffTreeBuilder {
         let from_paths: HashSet<_> = self.from_files.keys().cloned().collect();
         let to_paths: HashSet<_> = self.to_files.keys().cloned().collect();
 
-        let from_file_paths = self.collect_file_paths(&self.from_files);
-        let to_file_paths = self.collect_file_paths(&self.to_files);
-
-        let deleted: Vec<_> = from_file_paths.difference(&to_file_paths).cloned().collect();
-        let added: Vec<_> = to_file_paths.difference(&from_file_paths).cloned().collect();
+        let deleted: Vec<_> = self
+            .from_file_paths
+            .difference(&self.to_file_paths)
+            .cloned()
+            .collect();
+        let added: Vec<_> = self
+            .to_file_paths
+            .difference(&self.from_file_paths)
+            .cloned()
+            .collect();
 
         // 2. Detect renames
         let renames = self.detect_renames_optimized(&deleted, &added);
 
         // 3. Build tree structure
-        let from_dirs = self.collect_directories(&self.from_files);
-        let to_dirs = self.collect_directories(&self.to_files);
-        let tree = self.build_tree_structure(&from_paths, &to_paths, &from_dirs, &to_dirs);
+        let tree =
+            self.build_tree_structure(&from_paths, &to_paths, &self.from_dirs, &self.to_dirs);
 
         // 4. Compute statuses and counts
         self.compute_tree_stats(tree, &renames)
@@ -281,11 +297,35 @@ impl DiffTreeBuilder {
         all_paths.extend(from_dirs.iter().cloned());
         all_paths.extend(to_dirs.iter().cloned());
 
-        // Sort paths for consistent tree building
-        let mut sorted_paths: Vec<_> = all_paths.into_iter().collect();
-        sorted_paths.sort();
+        let mut nodes: HashMap<String, DiffFileEntry> = HashMap::new();
+        let mut children_map: HashMap<String, Vec<String>> = HashMap::new();
 
-        // Build root node
+        for path in &all_paths {
+            if path == "/" {
+                continue;
+            }
+            let file_type = self.resolve_file_type(path, from_dirs, to_dirs);
+
+            nodes.insert(
+                path.clone(),
+                DiffFileEntry {
+                    path: path.clone(),
+                    old_path: None,
+                    file_type,
+                    status: DiffStatus::Unchanged,
+                    added: None,
+                    removed: None,
+                    children: Some(Vec::new()),
+                },
+            );
+
+            let parent = Self::parent_path(path);
+            children_map
+                .entry(parent)
+                .or_insert_with(Vec::new)
+                .push(path.clone());
+        }
+
         let mut root = DiffFileEntry {
             path: "/".to_string(),
             old_path: None,
@@ -296,13 +336,7 @@ impl DiffTreeBuilder {
             children: Some(Vec::new()),
         };
 
-        // Insert each path into the tree
-        for path in sorted_paths {
-            let file_type = self.resolve_file_type(&path, from_dirs, to_dirs);
-
-            self.insert_node(&mut root, &path, file_type);
-        }
-
+        root.children = Some(Self::build_children("/", &mut nodes, &mut children_map));
         root
     }
 
@@ -336,44 +370,42 @@ impl DiffTreeBuilder {
         dirs
     }
 
-    fn insert_node(&self, root: &mut DiffFileEntry, path: &str, file_type: FileType) {
-        let parts: Vec<&str> = path.split('/').collect();
-        let mut current = root;
+    fn build_children(
+        parent: &str,
+        nodes: &mut HashMap<String, DiffFileEntry>,
+        children_map: &mut HashMap<String, Vec<String>>,
+    ) -> Vec<DiffFileEntry> {
+        let mut child_paths = match children_map.remove(parent) {
+            Some(paths) => paths,
+            None => return Vec::new(),
+        };
 
-        for (i, _part) in parts.iter().enumerate() {
-            let current_path = parts[..=i].join("/");
-            let is_leaf = i == parts.len() - 1;
+        child_paths.sort();
+        let mut children = Vec::with_capacity(child_paths.len());
 
-            // Get or create children vec
-            let children = current.children.as_mut().unwrap();
-
-            // Binary search to find insertion point or existing node
-            let child_pos = children.binary_search_by(|c| c.path.cmp(&current_path));
-
-            current = match child_pos {
-                Ok(pos) => {
-                    // Node already exists
-                    &mut children[pos]
-                }
-                Err(insert_pos) => {
-                    // Node doesn't exist, insert at correct sorted position
-                    let new_node = DiffFileEntry {
-                        path: current_path.clone(),
-                        old_path: None,
-                        file_type: if is_leaf {
-                            file_type.clone()
-                        } else {
-                            FileType::Directory
-                        },
-                        status: DiffStatus::Unchanged,
-                        added: None,
-                        removed: None,
-                        children: Some(Vec::new()),
-                    };
-                    children.insert(insert_pos, new_node);
-                    &mut children[insert_pos]
-                }
+        for child_path in child_paths {
+            let mut node = match nodes.remove(&child_path) {
+                Some(entry) => entry,
+                None => continue,
             };
+
+            let nested = Self::build_children(&child_path, nodes, children_map);
+            node.children = Some(nested);
+            children.push(node);
+        }
+
+        children
+    }
+
+    fn parent_path(path: &str) -> String {
+        if let Some(last_slash) = path.rfind('/') {
+            if last_slash == 0 {
+                "/".to_string()
+            } else {
+                path[..last_slash].to_string()
+            }
+        } else {
+            "/".to_string()
         }
     }
 
@@ -382,10 +414,7 @@ impl DiffTreeBuilder {
         mut root: DiffFileEntry,
         renames: &HashMap<String, String>,
     ) -> DiffFileEntry {
-        let from_dirs = self.collect_directories(&self.from_files);
-        let to_dirs = self.collect_directories(&self.to_files);
-
-        self.compute_node_stats(&mut root, renames, &from_dirs, &to_dirs);
+        self.compute_node_stats(&mut root, renames, &self.from_dirs, &self.to_dirs);
         root
     }
 
