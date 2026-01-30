@@ -1,4 +1,5 @@
 import init, {
+	type DiffResult,
 	get_diff_tree,
 	get_file_diff,
 	prefetch_package,
@@ -6,6 +7,7 @@ import init, {
 import wasmUrl from "../../wasm/diff-wasm/pkg/diff_wasm_bg.wasm?url";
 
 let wasmInitialized = false;
+
 export async function ensureWasmInitialized() {
 	if (!wasmInitialized) {
 		try {
@@ -25,23 +27,6 @@ export async function ensureWasmInitialized() {
 		}
 	}
 }
-
-export type DiffStatus =
-	| "added"
-	| "removed"
-	| "modified"
-	| "unchanged"
-	| "renamed";
-
-export type DiffFileEntry = {
-	path: string;
-	oldPath?: string;
-	type: "file" | "directory";
-	status: DiffStatus;
-	added?: number;
-	removed?: number;
-	children?: DiffFileEntry[];
-};
 
 type WorkerRequest =
 	| {
@@ -96,7 +81,7 @@ async function handleStartDiff(
 		const diffTree = await get_diff_tree(registry, pkg, from, to, 0.75);
 		const end = performance.now();
 
-		console.log(`build_diff_tree took ${(end - start).toFixed(2)}ms`);
+		console.log(`get_diff_tree took ${(end - start).toFixed(2)}ms`);
 
 		postMessage({
 			type: "diff-result",
@@ -126,10 +111,7 @@ async function handlePrefetch(
 
 export function handleGetDiff(filename: string, oldPath?: string) {
 	try {
-		const result = get_file_diff(filename, oldPath) as {
-			data: string;
-			isDiff: boolean;
-		};
+		const result: DiffResult = get_file_diff(filename, oldPath);
 		postMessage({
 			type: "diff-result",
 			filename,

@@ -4,27 +4,6 @@ use std::hash::{Hash, Hasher};
 use similar::{ChangeTag, TextDiff};
 use crate::types::{DiffFileEntry, DiffStatus, FileMapEntry, FileType};
 
-pub struct DiffCounts {
-    pub added: usize,
-    pub removed: usize,
-}
-
-pub fn count_diff(from: &str, to: &str) -> DiffCounts {
-    let from_lines: Vec<&str> = from.split('\n').collect();
-    let to_lines: Vec<&str> = to.split('\n').collect();
-    let diff = TextDiff::from_slices(&from_lines, &to_lines);
-    let mut added = 0;
-    let mut removed = 0;
-    for change in diff.iter_all_changes() {
-        match change.tag() {
-            ChangeTag::Delete => removed += 1,
-            ChangeTag::Insert => added += 1,
-            _ => {}
-        }
-    }
-    DiffCounts { added, removed }
-}
-
 pub fn get_diff_content(filename: &str, from_content: &str, to_content: &str) -> String {
     let from_lines: Vec<&str> = from_content.split('\n').collect();
     let to_lines: Vec<&str> = to_content.split('\n').collect();
