@@ -1,6 +1,8 @@
 mod types;
 mod core;
 mod package;
+mod logger;
+
 use std::cell::RefCell;
 use std::collections::HashMap;
 use wasm_bindgen::prelude::*;
@@ -104,7 +106,6 @@ pub fn build_diff_tree(
     Ok(serde_wasm_bindgen::to_value(&tree)?)
 }
 
-#[wasm_bindgen]
 pub async fn fetch_and_extract_package(
     registry: String,
     pkg: String,
@@ -178,7 +179,7 @@ pub async fn prefetch_package(
 }
 
 #[wasm_bindgen]
-pub async fn build_diff_tree_for_package(
+pub async fn get_diff_tree(
     registry: String,
     pkg: String,
     from: String,
@@ -199,7 +200,8 @@ pub async fn build_diff_tree_for_package(
 }
 
 #[wasm_bindgen]
-pub fn get_diff_for_path(filename: String, old_path: Option<String>) -> Result<JsValue, JsValue> {
+pub fn get_file_diff(filename: String, old_path: Option<String>) -> Result<JsValue, JsValue> {
+    console_log!("Hello {}!", "get_file_diff");
     let active = ACTIVE_DIFF
         .with(|state| state.borrow().clone())
         .ok_or_else(|| JsValue::from_str("No active diff context"))?;

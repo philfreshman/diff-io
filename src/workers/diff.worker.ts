@@ -1,6 +1,6 @@
 import init, {
-	build_diff_tree_for_package,
-	get_diff_for_path,
+	get_diff_tree,
+	get_file_diff,
 	prefetch_package,
 } from "../../wasm/diff-wasm/pkg/diff_wasm.js";
 import wasmUrl from "../../wasm/diff-wasm/pkg/diff_wasm_bg.wasm?url";
@@ -93,13 +93,7 @@ async function handleStartDiff(
 ) {
 	try {
 		const start = performance.now();
-		const diffTree = await build_diff_tree_for_package(
-			registry,
-			pkg,
-			from,
-			to,
-			0.75,
-		);
+		const diffTree = await get_diff_tree(registry, pkg, from, to, 0.75);
 		const end = performance.now();
 
 		console.log(`build_diff_tree took ${(end - start).toFixed(2)}ms`);
@@ -132,7 +126,7 @@ async function handlePrefetch(
 
 export function handleGetDiff(filename: string, oldPath?: string) {
 	try {
-		const result = get_diff_for_path(filename, oldPath) as {
+		const result = get_file_diff(filename, oldPath) as {
 			data: string;
 			isDiff: boolean;
 		};
