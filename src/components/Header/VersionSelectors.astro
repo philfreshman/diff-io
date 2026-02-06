@@ -1,14 +1,26 @@
 ---
+import DownloadIcon from "../Icons/DownloadIcon.astro";
 // Component for version dropdowns
 ---
 
 <div class="flex-1 relative group">
-	<label
-		for="from-version"
-		class="absolute -top-5 text-xs font-medium text-neutral-700 dark:text-neutral-300 mb-1"
-	>
-		From Version
-	</label>
+	<div class="absolute -top-5 left-0 flex items-center gap-2">
+		<label
+			for="from-version"
+			class="text-xs font-medium text-neutral-700 dark:text-neutral-300 mb-1"
+		>
+			From Version
+		</label>
+		<a
+			id="from-download"
+			class="mb-1 hidden text-neutral-400 hover:text-neutral-700 dark:text-neutral-500 dark:hover:text-neutral-300 transition-colors"
+			aria-label="Download From Version package"
+			title="Download package"
+			rel="noopener noreferrer"
+		>
+			<DownloadIcon class="w-4 h-4" />
+		</a>
+	</div>
 	<div class="relative">
 		<input
 			id="from-version"
@@ -26,12 +38,23 @@
 </div>
 
 <div class="flex-1 relative group">
-	<label
-		for="to-version"
-		class="absolute -top-5 text-xs font-medium text-neutral-700 dark:text-neutral-300 mb-1"
-	>
-		To Version
-	</label>
+	<div class="absolute -top-5 left-0 flex items-center gap-2">
+		<label
+			for="to-version"
+			class="text-xs font-medium text-neutral-700 dark:text-neutral-300 mb-1"
+		>
+			To Version
+		</label>
+		<a
+			id="to-download"
+			class="mb-1 hidden text-neutral-400 hover:text-neutral-700 dark:text-neutral-500 dark:hover:text-neutral-300 transition-colors"
+			aria-label="Download To Version package"
+			title="Download package"
+			rel="noopener noreferrer"
+		>
+			<DownloadIcon class="w-4 h-4" />
+		</a>
+	</div>
 	<div class="relative">
 		<input
 			id="to-version"
@@ -53,8 +76,8 @@
 		fetchVersions,
 		getRegistry,
 	} from "../../registries/searchService.ts";
-	import { parseUrl } from "../../utils/urlParser";
 	import { escapeHTML } from "../../utils/dom.ts";
+	import { parseUrl } from "../../utils/urlParser";
 
 	let abortController: AbortController | null = null;
 
@@ -63,12 +86,30 @@
 		abortController = new AbortController();
 		const { signal } = abortController;
 
-		const fromInput = document.getElementById("from-version") as HTMLInputElement;
+		const fromInput = document.getElementById(
+			"from-version",
+		) as HTMLInputElement;
 		const toInput = document.getElementById("to-version") as HTMLInputElement;
-		const fromResults = document.getElementById("from-results") as HTMLDivElement;
+		const fromResults = document.getElementById(
+			"from-results",
+		) as HTMLDivElement;
 		const toResults = document.getElementById("to-results") as HTMLDivElement;
+		const fromDownload = document.getElementById(
+			"from-download",
+		) as HTMLAnchorElement;
+		const toDownload = document.getElementById(
+			"to-download",
+		) as HTMLAnchorElement;
 
-		if (!fromInput || !toInput || !fromResults || !toResults) return;
+		if (
+			!fromInput ||
+			!toInput ||
+			!fromResults ||
+			!toResults ||
+			!fromDownload ||
+			!toDownload
+		)
+			return;
 
 		let allVersions: string[] = [];
 		let fromSelectedIndex = -1;
@@ -115,6 +156,7 @@
 				"package-search",
 			) as HTMLInputElement;
 			updateUrl(packageInput.value, fromInput.value, toInput.value);
+			updateDownloadLinks();
 			window.dispatchEvent(new CustomEvent("version-changed"));
 		}
 
@@ -146,7 +188,37 @@
 			fromResults.classList.add("hidden");
 			toResults.classList.add("hidden");
 			updateUrl("", "", "");
+			updateDownloadLinks();
 			window.dispatchEvent(new CustomEvent("version-changed"));
+		}
+
+		function buildDownloadUrl(packageName: string, version: string) {
+			if (!packageName || !version) return "";
+			const registry = getRegistry();
+			if (registry === "npm") {
+				const parts = packageName.split("/");
+				const unscopedName = parts[parts.length - 1] || packageName;
+				return `https://registry.npmjs.org/${packageName}/-/${unscopedName}-${version}.tgz`;
+			}
+			return `https://static.crates.io/crates/${packageName}/${packageName}-${version}.crate`;
+		}
+
+		function updateDownloadLinks() {
+			const packageInput = document.getElementById(
+				"package-search",
+			) as HTMLInputElement;
+			const packageName = packageInput?.value?.trim() || "";
+			const fromUrl = buildDownloadUrl(packageName, fromInput.value);
+			const toUrl = buildDownloadUrl(packageName, toInput.value);
+
+			fromDownload.href = fromUrl || "#";
+			toDownload.href = toUrl || "#";
+			fromDownload.classList.toggle("hidden", !fromUrl);
+			toDownload.classList.toggle("hidden", !toUrl);
+			fromDownload.setAttribute("aria-disabled", fromUrl ? "false" : "true");
+			toDownload.setAttribute("aria-disabled", toUrl ? "false" : "true");
+			fromDownload.tabIndex = fromUrl ? 0 : -1;
+			toDownload.tabIndex = toUrl ? 0 : -1;
 		}
 
 		async function loadVersions(packageName: string) {
@@ -180,6 +252,7 @@
 				);
 
 				updateUrl(packageName, fromInput.value, toInput.value);
+				updateDownloadLinks();
 			} catch (e) {
 				console.error(e);
 				fromInput.placeholder = "Error";
@@ -269,7 +342,8 @@
 					} else if (e.key === "Enter") {
 						e.preventDefault();
 						if (getIndex() >= 0) {
-							const version = (items[getIndex()] as HTMLElement).dataset.version;
+							const version = (items[getIndex()] as HTMLElement).dataset
+								.version;
 							if (version) selectVersion(input, version, results);
 						}
 					} else if (e.key === "Escape") {
@@ -280,7 +354,10 @@
 			);
 		});
 
-		function updateHighlight(items: NodeListOf<Element>, selectedIndex: number) {
+		function updateHighlight(
+			items: NodeListOf<Element>,
+			selectedIndex: number,
+		) {
 			items.forEach((item, i) => {
 				item.classList.toggle("bg-blue-50", i === selectedIndex);
 				item.classList.toggle("dark:bg-neutral-800", i === selectedIndex);
