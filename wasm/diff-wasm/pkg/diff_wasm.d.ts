@@ -2,53 +2,88 @@
 /* eslint-disable */
 
 export class DiffCounts {
-  private constructor();
-  free(): void;
-  [Symbol.dispose](): void;
-  added: number;
-  removed: number;
+    private constructor();
+    free(): void;
+    [Symbol.dispose](): void;
+    added: number;
+    removed: number;
 }
+
+export class DiffTreeBuilder {
+    free(): void;
+    [Symbol.dispose](): void;
+    build_tree(): any;
+    constructor(similarity_threshold: number);
+    set_from_files(files: any): void;
+    set_to_files(files: any): void;
+}
+
+export function build_diff_tree(from_files: any, to_files: any, similarity_threshold: number): any;
+
+export function build_diff_tree_for_package(registry: string, pkg: string, from: string, to: string, similarity_threshold: number): Promise<any>;
 
 export function count_diff(from: string, to: string): DiffCounts;
 
+export function fetch_and_extract_package(registry: string, pkg: string, version: string): Promise<any>;
+
 export function get_diff_content(filename: string, from_content: string, to_content: string): string;
+
+export function get_diff_for_path(filename: string, old_path?: string | null): any;
+
+export function prefetch_package(registry: string, pkg: string, version: string): Promise<void>;
 
 export type InitInput = RequestInfo | URL | Response | BufferSource | WebAssembly.Module;
 
 export interface InitOutput {
-  readonly memory: WebAssembly.Memory;
-  readonly __wbg_diffcounts_free: (a: number, b: number) => void;
-  readonly __wbg_get_diffcounts_added: (a: number) => number;
-  readonly __wbg_set_diffcounts_added: (a: number, b: number) => void;
-  readonly __wbg_get_diffcounts_removed: (a: number) => number;
-  readonly __wbg_set_diffcounts_removed: (a: number, b: number) => void;
-  readonly count_diff: (a: number, b: number, c: number, d: number) => number;
-  readonly get_diff_content: (a: number, b: number, c: number, d: number, e: number, f: number) => [number, number];
-  readonly __wbindgen_externrefs: WebAssembly.Table;
-  readonly __wbindgen_malloc: (a: number, b: number) => number;
-  readonly __wbindgen_realloc: (a: number, b: number, c: number, d: number) => number;
-  readonly __wbindgen_free: (a: number, b: number, c: number) => void;
-  readonly __wbindgen_start: () => void;
+    readonly memory: WebAssembly.Memory;
+    readonly __wbg_diffcounts_free: (a: number, b: number) => void;
+    readonly __wbg_difftreebuilder_free: (a: number, b: number) => void;
+    readonly __wbg_get_diffcounts_added: (a: number) => number;
+    readonly __wbg_get_diffcounts_removed: (a: number) => number;
+    readonly __wbg_set_diffcounts_added: (a: number, b: number) => void;
+    readonly __wbg_set_diffcounts_removed: (a: number, b: number) => void;
+    readonly build_diff_tree: (a: any, b: any, c: number) => [number, number, number];
+    readonly build_diff_tree_for_package: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number, i: number) => any;
+    readonly count_diff: (a: number, b: number, c: number, d: number) => number;
+    readonly difftreebuilder_build_tree: (a: number) => [number, number, number];
+    readonly difftreebuilder_new: (a: number) => number;
+    readonly difftreebuilder_set_from_files: (a: number, b: any) => [number, number];
+    readonly difftreebuilder_set_to_files: (a: number, b: any) => [number, number];
+    readonly fetch_and_extract_package: (a: number, b: number, c: number, d: number, e: number, f: number) => any;
+    readonly get_diff_content: (a: number, b: number, c: number, d: number, e: number, f: number) => [number, number];
+    readonly get_diff_for_path: (a: number, b: number, c: number, d: number) => [number, number, number];
+    readonly prefetch_package: (a: number, b: number, c: number, d: number, e: number, f: number) => any;
+    readonly wasm_bindgen__closure__destroy__hf610b7ce91a92bfa: (a: number, b: number) => void;
+    readonly wasm_bindgen__convert__closures_____invoke__h26d2e9b1279394f7: (a: number, b: number, c: any, d: any) => void;
+    readonly wasm_bindgen__convert__closures_____invoke__hd42d7be819e8e283: (a: number, b: number, c: any) => void;
+    readonly __wbindgen_malloc: (a: number, b: number) => number;
+    readonly __wbindgen_realloc: (a: number, b: number, c: number, d: number) => number;
+    readonly __wbindgen_exn_store: (a: number) => void;
+    readonly __externref_table_alloc: () => number;
+    readonly __wbindgen_externrefs: WebAssembly.Table;
+    readonly __externref_table_dealloc: (a: number) => void;
+    readonly __wbindgen_free: (a: number, b: number, c: number) => void;
+    readonly __wbindgen_start: () => void;
 }
 
 export type SyncInitInput = BufferSource | WebAssembly.Module;
 
 /**
-* Instantiates the given `module`, which can either be bytes or
-* a precompiled `WebAssembly.Module`.
-*
-* @param {{ module: SyncInitInput }} module - Passing `SyncInitInput` directly is deprecated.
-*
-* @returns {InitOutput}
-*/
+ * Instantiates the given `module`, which can either be bytes or
+ * a precompiled `WebAssembly.Module`.
+ *
+ * @param {{ module: SyncInitInput }} module - Passing `SyncInitInput` directly is deprecated.
+ *
+ * @returns {InitOutput}
+ */
 export function initSync(module: { module: SyncInitInput } | SyncInitInput): InitOutput;
 
 /**
-* If `module_or_path` is {RequestInfo} or {URL}, makes a request and
-* for everything else, calls `WebAssembly.instantiate` directly.
-*
-* @param {{ module_or_path: InitInput | Promise<InitInput> }} module_or_path - Passing `InitInput` directly is deprecated.
-*
-* @returns {Promise<InitOutput>}
-*/
+ * If `module_or_path` is {RequestInfo} or {URL}, makes a request and
+ * for everything else, calls `WebAssembly.instantiate` directly.
+ *
+ * @param {{ module_or_path: InitInput | Promise<InitInput> }} module_or_path - Passing `InitInput` directly is deprecated.
+ *
+ * @returns {Promise<InitOutput>}
+ */
 export default function __wbg_init (module_or_path?: { module_or_path: InitInput | Promise<InitInput> } | InitInput | Promise<InitInput>): Promise<InitOutput>;

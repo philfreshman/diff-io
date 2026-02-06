@@ -39,13 +39,6 @@ import TreeList from "./TreeList.astro";
 	import { parseUrl } from "../../utils/urlParser";
 	import type { DiffFileEntry, DiffStatus } from "../../workers/diff.worker";
 
-	interface FileMap {
-		[path: string]: {
-			content: string;
-			[key: string]: unknown;
-		};
-	}
-
 	const STORAGE_KEY = "tree_panel_width";
 	const MODIFIED_STORAGE_KEY = "tree_show_only_modified";
 	const DEFAULT_WIDTH = 320;
@@ -64,8 +57,6 @@ import TreeList from "./TreeList.astro";
 	let width = DEFAULT_WIDTH;
 	let diffData: DiffFileEntry | null = null;
 	let diffWorker: Worker | null = null;
-	let fromFiles: FileMap | null = null;
-	let toFiles: FileMap | null = null;
 	let selectedFilePath = "";
 
 	// SVGs
@@ -191,25 +182,17 @@ import TreeList from "./TreeList.astro";
 				} else {
 					expandedKeys = new Set();
 					diffData = e.data.data;
-					fromFiles = e.data.fromFiles;
-					toFiles = e.data.toFiles;
 					renderTree();
 
 					const state = parseUrl(window.location.pathname);
 					if (state.file) {
 						selectedFilePath = state.file;
 						const item = diffData ? findNode(diffData, state.file) : null;
-						const fromContent = fromFiles?.[item?.oldPath || state.file]?.content;
-						const toContent = toFiles?.[state.file]?.content;
-						if (
-							(fromContent !== undefined || toContent !== undefined) &&
-							diffWorker
-						) {
+						if (diffWorker) {
 							diffWorker.postMessage({
 								type: "get-diff",
 								filename: state.file,
-								fromContent,
-								toContent,
+								oldPath: item?.oldPath,
 							});
 							// Expand folders
 							const parts = state.file.split("/");
@@ -329,23 +312,19 @@ import TreeList from "./TreeList.astro";
 
 	window.addEventListener("popstate", () => {
 		const state = parseUrl(window.location.pathname);
-		if (state.file !== selectedFilePath) {
-			selectedFilePath = state.file;
-			if (selectedFilePath && diffWorker) {
-				const fromContent = fromFiles?.[selectedFilePath]?.content;
-				const toContent = toFiles?.[selectedFilePath]?.content;
-				if (fromContent !== undefined || toContent !== undefined) {
+			if (state.file !== selectedFilePath) {
+				selectedFilePath = state.file;
+				if (selectedFilePath && diffWorker && diffData) {
+					const item = findNode(diffData, selectedFilePath);
 					diffWorker.postMessage({
 						type: "get-diff",
 						filename: selectedFilePath,
-						fromContent,
-						toContent,
+						oldPath: item?.oldPath,
 					});
 				}
+				renderTree();
 			}
-			renderTree();
-		}
-	});
+		});
 
 	function updateUrl(file: string) {
 		const state = parseUrl(window.location.pathname);
@@ -492,13 +471,10 @@ import TreeList from "./TreeList.astro";
 				updateUrl(item.path);
 				renderTree();
 
-				const fromContent = fromFiles?.[item.oldPath || item.path]?.content;
-				const toContent = toFiles?.[item.path]?.content;
 				diffWorker.postMessage({
 					type: "get-diff",
 					filename: item.path,
-					fromContent,
-					toContent,
+					oldPath: item.oldPath,
 				});
 			}
 		});
