@@ -1,29 +1,23 @@
+import type { InitOutput } from "diff-wasm";
 import init, {
 	build_diff_tree_for_package,
 	get_diff_for_path,
 	prefetch_package,
-} from "../../wasm/diff-wasm/pkg/diff_wasm.js";
-import wasmUrl from "../../wasm/diff-wasm/pkg/diff_wasm_bg.wasm?url";
+} from "diff-wasm";
 
-let wasmInitialized = false;
-export async function ensureWasmInitialized() {
-	if (!wasmInitialized) {
-		try {
-			let module_or_path: string | URL | Request = wasmUrl as any;
-			if (
-				typeof module_or_path === "string" &&
-				module_or_path.startsWith("/") &&
-				typeof process !== "undefined"
-			) {
-				module_or_path = `file://${module_or_path}`;
-			}
-			await init({ module_or_path });
-			wasmInitialized = true;
-		} catch (error) {
-			console.error("WASM initialization failed:", error);
-			throw error;
-		}
+import wasmUrl from "diff-wasm/diff_wasm_bg.wasm?url";
+
+let wasmPromise: Promise<InitOutput> | null = null;
+
+export function ensureWasmInitialized(): Promise<InitOutput> {
+	if (!wasmPromise) {
+		wasmPromise = init(wasmUrl).catch((err: Error) => {
+			console.error("WASM initialization failed:", err);
+			console.error("WASM url: ", wasmUrl);
+			throw err;
+		});
 	}
+	return wasmPromise;
 }
 
 export type DiffStatus =

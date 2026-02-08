@@ -45,3 +45,7 @@ Thumbs.db
 
 # Photoshop
 *.psd
+
+# Vercel
+.vercel
+.env*.local

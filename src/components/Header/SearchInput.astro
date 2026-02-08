@@ -1,0 +1,48 @@
+---
+import ResetIcon from "../Icons/ResetIcon.astro";
+import SearchIcon from "../Icons/SearchIcon.astro";
+
+interface Props {
+	registry: string;
+}
+
+const { registry } = Astro.props;
+---
+
+<label
+	for="package-search"
+	class="absolute -top-5 text-xs font-medium text-neutral-700 dark:text-neutral-300 mb-1"
+>
+	Package Name
+</label>
+<div class="relative">
+	<input
+		id="package-search"
+		type="text"
+		value=""
+		placeholder={`Search ${registry || 'package'}s...`}
+		autocomplete="off"
+		class="w-full px-4 py-2 pr-10 bg-white dark:bg-neutral-900 border border-neutral-300 dark:border-neutral-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm text-neutral-900 dark:text-white placeholder-neutral-400 dark:placeholder-neutral-500"
+	>
+	<div
+		id="search-loading"
+		class="absolute right-3 top-1/2 -translate-y-1/2 hidden"
+	>
+		<div
+			class="animate-spin rounded-full h-4 w-4 border-2 border-blue-500 border-t-transparent"
+		></div>
+	</div>
+	<div id="search-icon" class="absolute right-3 top-1/2 -translate-y-1/2">
+		<SearchIcon class="w-4 h-4 text-neutral-400 dark:text-neutral-500" />
+	</div>
+	<button
+		id="search-reset"
+		type="button"
+		class="absolute right-3 top-1/2 -translate-y-1/2 hidden"
+		aria-label="Reset search"
+	>
+		<ResetIcon
+			class="w-4 h-4 text-neutral-400 hover:text-neutral-600 dark:text-neutral-500 dark:hover:text-neutral-300"
+		/>
+	</button>
+</div>
