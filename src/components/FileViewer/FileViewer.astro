@@ -29,6 +29,7 @@ import Toolbar from "./Toolbar.astro";
 	let diffFilename = document.getElementById("diff-filename");
 	let diffContent = document.getElementById("diff-content");
 	let languageBadge = document.getElementById("language-badge");
+	let loadingOverlay = document.getElementById("loading-overlay");
 	let scrollbarTrack = document.getElementById("scrollbar-track");
 	let scrollbarThumb = document.getElementById("scrollbar-thumb");
 	let scrollbarMarkers = document.getElementById("scrollbar-markers");
@@ -73,6 +74,7 @@ import Toolbar from "./Toolbar.astro";
 		diffFilename = document.getElementById("diff-filename");
 		diffContent = document.getElementById("diff-content");
 		languageBadge = document.getElementById("language-badge");
+		loadingOverlay = document.getElementById("loading-overlay");
 		scrollbarTrack = document.getElementById("scrollbar-track");
 		scrollbarThumb = document.getElementById("scrollbar-thumb");
 		scrollbarMarkers = document.getElementById("scrollbar-markers");
@@ -610,17 +612,34 @@ import Toolbar from "./Toolbar.astro";
 		isDiff: boolean;
 	}
 
-	window.addEventListener("start-diff", resetDiff);
 	window.addEventListener("expand-all-diff", () => {
 		markForceVisibleRange(0, currentProcessedLines.length - 1);
+		saveExpandedState();
 		renderDiffContent(true);
+	});
+	window.addEventListener("fold-all-diff", () => {
+		currentProcessedLines.forEach((line) => {
+			line.forceVisible = false;
+		});
+		saveExpandedState();
+		renderDiffContent();
 	});
 	window.addEventListener("file-diff", (e) => {
 		const customEvent = e as CustomEvent<FileDiffDetail>;
 		const detail = customEvent.detail;
+		if (loadingOverlay) loadingOverlay.classList.add("hidden");
 		if (detail?.filename && detail.diff !== undefined) {
 			showDiff(detail.filename, detail.diff, detail.isDiff);
 		}
+	});
+
+	window.addEventListener("loading-file", () => {
+		if (loadingOverlay) loadingOverlay.classList.remove("hidden");
+	});
+
+	window.addEventListener("start-diff", () => {
+		resetDiff();
+		if (loadingOverlay) loadingOverlay.classList.remove("hidden");
 	});
 
 	window.addEventListener("resize", () => {

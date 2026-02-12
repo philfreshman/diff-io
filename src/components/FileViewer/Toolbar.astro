@@ -1,4 +1,5 @@
 ---
+import FoldIcon from "../Icons/FoldIcon.astro";
 import UnfoldIcon from "../Icons/UnfoldIcon.astro";
 import ThemeSelect from "./ThemeSelect.astro";
 ---
@@ -15,7 +16,12 @@ import ThemeSelect from "./ThemeSelect.astro";
 				class="p-1.5 rounded-md hover:bg-neutral-100 dark:hover:bg-neutral-800 text-neutral-600 dark:text-neutral-400 transition-colors"
 				title="Expand all"
 			>
-				<UnfoldIcon/>
+				<span id="unfold-icon-wrapper">
+					<UnfoldIcon />
+				</span>
+				<span id="fold-icon-wrapper" class="hidden">
+					<FoldIcon />
+				</span>
 			</button>
 		</div>
 		<div
@@ -27,15 +33,42 @@ import ThemeSelect from "./ThemeSelect.astro";
 			class="hidden px-2 py-0.5 rounded bg-neutral-100 dark:bg-neutral-800 text-[10px] font-medium text-neutral-600 dark:text-neutral-400 uppercase"
 		/>
 	</div>
-	<ThemeSelect/>
+	<ThemeSelect />
 </div>
 
 <script>
 	function initToolbar() {
 		const expandAllBtn = document.getElementById("expand-all-btn");
+		const unfoldIconWrapper = document.getElementById("unfold-icon-wrapper");
+		const foldIconWrapper = document.getElementById("fold-icon-wrapper");
+
+		let isExpanded = false;
+
+		function updateIcon() {
+			if (isExpanded) {
+				unfoldIconWrapper?.classList.add("hidden");
+				foldIconWrapper?.classList.remove("hidden");
+				if (expandAllBtn) expandAllBtn.title = "Fold all";
+			} else {
+				unfoldIconWrapper?.classList.remove("hidden");
+				foldIconWrapper?.classList.add("hidden");
+				if (expandAllBtn) expandAllBtn.title = "Expand all";
+			}
+		}
 
 		expandAllBtn?.addEventListener("click", () => {
-			window.dispatchEvent(new CustomEvent("expand-all-diff"));
+			isExpanded = !isExpanded;
+			updateIcon();
+			if (isExpanded) {
+				window.dispatchEvent(new CustomEvent("expand-all-diff"));
+			} else {
+				window.dispatchEvent(new CustomEvent("fold-all-diff"));
+			}
+		});
+
+		window.addEventListener("file-diff", () => {
+			isExpanded = false;
+			updateIcon();
 		});
 	}
 
