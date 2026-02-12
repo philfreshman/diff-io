@@ -14,7 +14,7 @@ export function parseUrl(pathname: string): UrlState {
 		return { registry: "npm", package: "", from: "", to: "" , file: ""};
 	}
 
-	const isKnownRegistry = parts[0] === "npm" || parts[0] === "crates" || parts[0] === "pypi";
+	const isKnownRegistry = parts[0] === "npm" || parts[0] === "crates" || parts[0] === "pypi" || parts[0] === "rubygems";
 	const registry = isKnownRegistry ? parts[0] : "npm";
 	const remainingParts = isKnownRegistry ? parts.slice(1) : parts;
 
