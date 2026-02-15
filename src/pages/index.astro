@@ -3,7 +3,8 @@ import BaseHead from "../components/BaseHead.astro";
 import ThemeIcon from "../components/Header/ThemeIcon.astro";
 
 const title = "diffpack - Compare package versions across ecosystems";
-const description = "Compare package versions across ecosystems. Clean. Fast. Source-aware dependency review tool for npm and crates.io.";
+const description =
+	"Compare package versions across ecosystems. Clean. Fast. Source-aware dependency review tool for npm and crates.io.";
 
 const tiles = [
 	{
@@ -32,7 +33,7 @@ const tiles = [
 	<body
 		class="min-h-screen bg-white text-neutral-900 transition-colors duration-300 dark:bg-neutral-950 dark:text-neutral-100"
 	>
-		<ThemeIcon/>
+		<ThemeIcon />
 
 		<main class="flex min-h-screen flex-col items-center justify-center px-6">
 			<div class="mb-16 text-center">
@@ -41,10 +42,10 @@ const tiles = [
 				>
 					diffpack
 				</h1>
-				<p class="mt-4 max-w-md whitespace-pre-line text-neutral-600 dark:text-neutral-400">
-					Compare package versions across ecosystems.
-					Clean. Fast. Source-aware.
-				</p>
+				<div class="mt-4 max-w-md text-neutral-600 dark:text-neutral-400">
+					<div>Compare package versions across ecosystems.</div>
+					<div>Clean. Fast. Source-aware.</div>
+				</div>
 			</div>
 
 			<div class="grid w-full max-w-4xl grid-cols-1 gap-8 sm:grid-cols-2">
