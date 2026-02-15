@@ -1,25 +1,25 @@
 ---
 import BaseHead from "../components/BaseHead.astro";
 import ThemeIcon from "../components/Header/ThemeIcon.astro";
+import SpaceBackground from "../layouts/SpaceBackground.astro";
 
 const title = "diffpack - Compare package versions across ecosystems";
 const description =
 	"Compare package versions across ecosystems. Clean. Fast. Source-aware dependency review tool for npm and crates.io.";
-
 const tiles = [
 	{
 		title: "npm",
 		subtitle: "JavaScript & TypeScript packages",
 		href: "/npm",
-		glow: "from-red-500/20 via-pink-500/20 to-orange-500/20 dark:from-red-500/40 dark:via-pink-500/40 dark:to-orange-500/40",
-		border: "border-red-200 dark:border-red-500/40",
+		glowColor: "rgba(239, 68, 68, 0.4)", // red-500
+		borderColor: "rgba(239, 68, 68, 0.3)",
 	},
 	{
 		title: "crates.io",
 		subtitle: "Rust ecosystem packages",
 		href: "/crates",
-		glow: "from-orange-400/20 via-amber-400/20 to-yellow-300/20 dark:from-orange-400/40 dark:via-amber-400/40 dark:to-yellow-300/40",
-		border: "border-orange-200 dark:border-orange-400/40",
+		glowColor: "rgba(251, 146, 60, 0.4)", // orange-400
+		borderColor: "rgba(251, 146, 60, 0.3)",
 	},
 ];
 ---
@@ -28,65 +28,71 @@ const tiles = [
 <html lang="en" data-theme>
 	<head>
 		<BaseHead title={title} description={description} />
-	</head>
+		<style>
+			.tile-npm:hover {
+				box-shadow:
+					0 0 20px rgba(239, 68, 68, 0.4),
+					0 0 40px rgba(239, 68, 68, 0.3);
+			}
 
+			.tile-crates:hover {
+				box-shadow:
+					0 0 20px rgba(251, 146, 60, 0.4),
+					0 0 40px rgba(251, 146, 60, 0.3);
+			}
+		</style>
+	</head>
 	<body
-		class="min-h-screen bg-white text-neutral-900 transition-colors duration-300 dark:bg-neutral-950 dark:text-neutral-100"
+		class="min-h-screen text-neutral-900 transition-colors duration-300 dark:text-neutral-100"
 	>
 		<ThemeIcon />
-
-		<main class="flex min-h-screen flex-col items-center justify-center px-6">
+		<SpaceBackground showGradient={true} />
+		<main
+			class="relative flex min-h-screen flex-col items-center justify-center px-6"
+		>
 			<div class="mb-16 text-center">
-				<h1
-					class="text-4xl font-bold tracking-tight sm:text-5xl font-miriam-libre"
-				>
-					diffpack
-				</h1>
+				<h1 class="text-4xl font-bold tracking-tight sm:text-5xl">diffpack</h1>
 				<div class="mt-4 max-w-md text-neutral-600 dark:text-neutral-400">
-					<div>Compare package versions across ecosystems.</div>
-					<div>Clean. Fast. Source-aware.</div>
+					<p>Compare package versions across ecosystems.</p>
+					<p>Clean. Fast. Source-aware.</p>
 				</div>
 			</div>
 
 			<div class="grid w-full max-w-4xl grid-cols-1 gap-8 sm:grid-cols-2">
-				{tiles.map((tile) => (
+				{tiles.map((tile, index) => (
 				<a
-					href={tile.href}
-					class="group relative rounded-2xl p-px transition-transform duration-300 hover:scale-[1.02]"
+						href={tile.href}
+						class={`tile-${index === 0 ? 'npm' : 'crates'} group relative rounded-2xl duration-300 hover:scale-[1.02] block`}
+						style={{
+							border: `2px solid ${tile.borderColor}`,
+						}}
 				>
-					<div
-						class={`absolute -inset-1 rounded-2xl bg-linear-to-r ${tile.glow} blur-xl opacity-0 transition-opacity duration-300 group-hover:opacity-100`}
-					/>
-
-					<div
-						class={`relative h-full rounded-2xl border ${tile.border} bg-white/80 dark:bg-neutral-900/80 p-8 backdrop-blur shadow-sm dark:shadow-none`}
-					>
-						<h2 class="text-2xl font-semibold tracking-tight">
+					<div class="relative h-full p-8 rounded-2xl backdrop-blur-xs dark:bg-neutral-950/40">
+						<h2 class="text-2xl font-semibold">
 							{tile.title}
 						</h2>
 						<p class="mt-2 text-sm text-neutral-600 dark:text-neutral-400">
 							{tile.subtitle}
 						</p>
-
 						<div class="mt-6 inline-flex items-center gap-2 text-sm font-medium text-neutral-700 dark:text-neutral-200">
 							Explore
 							<svg
-								class="h-4 w-4 transition-transform duration-300 group-hover:translate-x-1"
-								fill="none"
-								stroke="currentColor"
-								viewBox="0 0 24 24"
+									class="h-4 w-4 transition-transform duration-300 group-hover:translate-x-1"
+									fill="none"
+									stroke="currentColor"
+									viewBox="0 0 24 24"
 							>
 								<path
-									stroke-linecap="round"
-									stroke-linejoin="round"
-									stroke-width="2"
-									d="M9 5l7 7-7 7"
+										stroke-linecap="round"
+										stroke-linejoin="round"
+										stroke-width="2"
+										d="M9 5l7 7-7 7"
 								/>
 							</svg>
 						</div>
 					</div>
 				</a>
-			))}
+		))}
 			</div>
 
 			<p class="mt-16 text-xs text-neutral-400 dark:text-neutral-500">

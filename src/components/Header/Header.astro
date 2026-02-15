@@ -4,26 +4,14 @@ import ThemeIcon from "./ThemeIcon.astro";
 import VersionSelectors from "./VersionSelectors.astro";
 
 const { registry } = Astro.props;
-
-const registryGradients: Record<string, string> = {
-	npm: "from-red-500/20 via-orange-500/10 to-white-500/20",
-	crates: "from-orange-400/20 via-amber-400/10 to-transparent",
-};
-
-const currentGradient = registryGradients[registry] || "";
 ---
 
 <header
 	id="header-container"
 	data-registry={registry || 'npm'}
-	class={`relative w-full flex-none bg-white dark:bg-neutral-950 border-b border-neutral-200 dark:border-neutral-800 flex items-center justify-center`}
+	class={`relative w-full flex-none bg-white dark:bg-neutral-950 border-b border-neutral-200 dark:border-neutral-800 flex items-center justify-center z-10`}
 	style="height: var(--header-height-md)"
 >
-	<!--{currentGradient && (-->
-	<!--		<div class={`absolute inset-0 bg-gradient-to-br ${currentGradient} pointer-events-none`}></div>-->
-	<!--)}-->
-
-	<!-- Logo/Title -->
 	<div
 		class="absolute left-4 top-1/2 -translate-y-1/2 flex justify-center items-center border-2 border-neutral-200 rounded-lg hover:border-3 hover:left-3.75 "
 	>
@@ -37,10 +25,10 @@ const currentGradient = registryGradients[registry] || "";
 
 	<div class="flex items-end gap-4 w-full max-w-4xl">
 		<!-- Package Search Component -->
-		<PackageSearch registry={registry}/>
+		<PackageSearch registry={registry} />
 
 		<!-- Version Selectors Component -->
-		<VersionSelectors/>
+		<VersionSelectors />
 
 		<!-- Compare Button -->
 		<button
@@ -52,7 +40,7 @@ const currentGradient = registryGradients[registry] || "";
 		</button>
 	</div>
 
-	<ThemeIcon/>
+	<ThemeIcon />
 </header>
 
 <script>
