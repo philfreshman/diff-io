@@ -5,7 +5,7 @@ import SpaceBackground from "../layouts/SpaceBackground.astro";
 
 const title = "diffpack - Compare package versions across ecosystems";
 const description =
-	"Compare package versions across ecosystems. Clean. Fast. Source-aware dependency review tool for npm and crates.io.";
+	"Compare package versions across ecosystems. Clean. Fast. Source-aware dependency review tool for npm, crates.io and PyPI.";
 const tiles = [
 	{
 		title: "npm",
@@ -20,6 +20,13 @@ const tiles = [
 		href: "/crates",
 		glowColor: "rgba(251, 146, 60, 0.4)", // orange-400
 		borderColor: "rgba(251, 146, 60, 0.3)",
+	},
+	{
+		title: "PyPI",
+		subtitle: "Python packages",
+		href: "/pypi",
+		glow: "from-blue-500/20 via-blue-400/20 to-yellow-400/20 dark:from-blue-500/40 dark:via-blue-400/40 dark:to-yellow-400/40",
+		border: "border-blue-200 dark:border-blue-500/40",
 	},
 ];
 ---

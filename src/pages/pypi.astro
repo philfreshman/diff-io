@@ -1,0 +1,18 @@
+---
+import FileViewer from "../components/FileViewer/FileViewer.astro";
+import Layout from "../layouts/Layout.astro";
+---
+
+<Layout
+	registry="pypi"
+	title="PyPI"
+	description="Compare PyPI package versions and view source-aware diffs for the Python ecosystem."
+>
+	<div id="content" class="flex-1 p-4 overflow-auto min-w-0">
+		<FileViewer />
+	</div>
+</Layout>
+
+<script>
+	fetch("https://diffpack-api.vercel.app/api/ping");
+</script>

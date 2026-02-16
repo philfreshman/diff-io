@@ -9,7 +9,7 @@ export interface PackageRegistry {
 export type SearchResult = {
 	name: string;
 	description?: string;
-	version: string;
+	version?: string;
 };
 
 export type PackageVersion = {
