@@ -3,8 +3,8 @@ import type { PackageVersion, SearchResult } from "../../types.ts";
 import type { PyPIService } from "../domain/base.ts";
 
 export class PyPIRegistryService implements PyPIService {
-	async search(query: string): Promise<SearchResult[]> {
-		return await backend.search(query, "pypi");
+	async search(packageName: string): Promise<SearchResult[]> {
+		return await backend.search(packageName, "pypi");
 	}
 
 	async getVersions(name: string): Promise<string[]> {

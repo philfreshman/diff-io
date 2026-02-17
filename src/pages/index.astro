@@ -32,14 +32,21 @@ const tiles = [
 			glow: "59, 130, 246", // blue-500
 		},
 	},
+	{
+		title: "RubyGems",
+		subtitle: "Ruby ecosystem packages",
+		href: "/rubygems",
+		colors: {
+			glow: "220, 38, 38", // red-600
+		},
+	},
 ];
 ---
 
 <!doctype html>
 <html lang="en" data-theme>
-	<head>
-		<BaseHead title={title} description={description} />
-	</head>
+	<BaseHead title={title} description={description} />
+
 	<body
 		class="min-h-screen text-neutral-900 transition-colors duration-300 dark:text-neutral-100"
 	>
@@ -79,17 +86,17 @@ const tiles = [
 							<div class="mt-6 inline-flex items-center gap-2 text-sm font-medium text-neutral-700 dark:text-neutral-200">
 								Explore
 								<svg
-										class="h-4 w-4 transition-transform duration-300 group-hover:translate-x-1"
-										fill="none"
-										stroke="currentColor"
-										viewBox="0 0 24 24"
-										aria-hidden="true"
+									class="h-4 w-4 transition-transform duration-300 group-hover:translate-x-1"
+									fill="none"
+									stroke="currentColor"
+									viewBox="0 0 24 24"
+									aria-hidden="true"
 								>
 									<path
-											stroke-linecap="round"
-											stroke-linejoin="round"
-											stroke-width="2"
-											d="M9 5l7 7-7 7"
+										stroke-linecap="round"
+										stroke-linejoin="round"
+										stroke-width="2"
+										d="M9 5l7 7-7 7"
 									/>
 								</svg>
 								<span class="sr-only">Explore {tile.title}</span>

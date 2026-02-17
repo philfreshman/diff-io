@@ -17,16 +17,6 @@ Compare package versions across ecosystems. Clean. Fast. Source-aware.
 bun install
 ```
 
-### WASM Development
-
-The core diffing logic is implemented in Rust and compiled to WebAssembly. To rebuild the WASM module:
-
-```bash
-bun run build:wasm
-```
-
-This requires [`wasm-pack`](https://rustwasm.github.io/wasm-pack/installer/) to be installed on your system.
-
 ### Development Server
 
 ```bash
@@ -49,6 +39,8 @@ bun run build
 
 - **npm** - JavaScript & TypeScript packages
 - **crates.io** - Rust ecosystem packages
+- **PyPi** - Python ecosystem packages
+- **rubygems** - Ruby ecosystem packages
 
-More registries coming soon.
+🚧 More registries coming soon. 🚧
 
