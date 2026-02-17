@@ -69,6 +69,7 @@ const tiles = [
 				{tiles.map((tile) => (
 					<a
 						href={tile.href}
+						data-astro-prefetch
 						class="group relative block rounded-2xl transition-transform duration-300 hover:scale-[1.02]"
 						style={{
 							border: `2px solid rgba(${tile.colors.glow}, 0.3)`,

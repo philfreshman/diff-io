@@ -93,14 +93,23 @@ const { showGradient = false } = Astro.props;
 			transform: translateX(300px) translateY(300px);
 		}
 	}
+
+	#starfield {
+		animation: starfieldFadeIn 1s ease-in forwards;
+	}
+	@keyframes starfieldFadeIn {
+		from {
+			opacity: 0;
+		}
+		to {
+			opacity: 1;
+		}
+	}
 </style>
 
-<div
-	class={`cosmic-bg bg-space-radial ${showGradient ? '' : 'hidden'}`}
-	transition:persist
-></div>
+<div class={`cosmic-bg bg-space-radial ${showGradient ? '' : 'hidden'}`}></div>
 
-<div class="starfield" id="starfield" transition:persist></div>
+<div class="starfield" id="starfield"></div>
 
 <script>
 	const starfield = document.getElementById("starfield");
