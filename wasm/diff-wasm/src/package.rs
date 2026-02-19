@@ -55,7 +55,7 @@ fn build_tarball_url(registry: &str, pkg: &str, version: &str) -> Result<String,
             "https://static.crates.io/crates/{pkg}/{pkg}-{version}.crate"
         )),
 
-        "rubygems" => Ok(format!("http://88.198.74.219/api/download?package={pkg}&version={version}&registry=rubygems")),
+        "rubygems" => Ok(format!("https://88.198.74.219/api/download?package={pkg}&version={version}&registry=rubygems")),
         _ => Err(JsValue::from_str(&format!(
             "Unsupported registry: {registry}"
         ))),
