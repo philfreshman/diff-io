@@ -96,7 +96,7 @@ async function handleStartDiff(
 		);
 		const end = performance.now();
 
-		console.log(`build_diff_tree took ${(end - start).toFixed(2)}ms`);
+		console.log(`Building diff tree took ${(end - start).toFixed(2)}ms`);
 
 		postMessage({
 			type: "diff-result",
