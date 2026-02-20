@@ -1,25 +1,26 @@
 {
-	"name": "node-diff",
-	"type": "module",
-	"version": "0.0.1",
-	"scripts": {
-		"dev": "astro dev",
-		"prepare": "RUST_LOG=info bunx wasm-pack build --target web wasm/diff-wasm",
-		"build": "bun run prepare && astro build",
-		"preview": "astro build && astro preview",
-		"astro": "astro",
-		"format": "bunx biome check --write"
-	},
-	"dependencies": {
-		"@vercel/analytics": "^1.6.1",
-		"astro": "5.17.2",
-		"highlight.js": "^11.11.1",
-		"diff-wasm": "file:./wasm/diff-wasm/pkg"
-	},
-	"devDependencies": {
-		"@biomejs/biome": "2.4.0",
-		"@tailwindcss/vite": "4.1.18",
-		"tailwindcss": "4.1.18",
-		"wasm-pack": "^0.14.0"
-	}
+  "name": "diffpack",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "eslint"
+  },
+  "dependencies": {
+    "next": "16.1.6",
+    "react": "19.2.3",
+    "react-dom": "19.2.3"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4",
+    "@types/node": "^20",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "eslint": "^9",
+    "eslint-config-next": "16.1.6",
+    "tailwindcss": "^4",
+    "typescript": "^5"
+  }
 }
