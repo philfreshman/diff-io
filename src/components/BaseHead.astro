@@ -63,3 +63,15 @@ const { title, description } = Astro.props;
 	<Analytics />
 	<script src="../utils/theme.ts"></script>
 </head>
+<!-- Google tag (gtag.js) -->
+<script is:inline async src="https://www.googletagmanager.com/gtag/js?id=G-JH9PM7WWGG"></script>
+<script>
+	// @ts-nocheck
+	// biome-ignore-start lint: google stuff
+	window.dataLayer = window.dataLayer || [];
+	function gtag(){dataLayer.push(arguments);}
+	gtag('js', new Date());
+
+	gtag('config', 'G-JH9PM7WWGG');
+	// biome-ignore-end lint: google stuff
+</script>

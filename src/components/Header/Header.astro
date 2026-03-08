@@ -1,6 +1,6 @@
 ---
 import PackageSearch from "./PackageSearch.astro";
-import ThemeIcon from "./ThemeIcon.astro";
+import ThemeToggle from "./ThemeToggle.tsx";
 import VersionSelectors from "./VersionSelectors.astro";
 
 const { registry } = Astro.props;
@@ -13,7 +13,7 @@ const { registry } = Astro.props;
 	style="height: var(--header-height-md)"
 >
 	<div
-		class="absolute left-4 top-1/2 min-w-26.25 -translate-y-1/2 flex justify-center items-center border-2 border-neutral-200 rounded-lg hover:border-3 hover:left-3.75 "
+		class="absolute left-4 top-1/2 min-w-26.25 -translate-y-1/2 flex justify-center items-center border-2 border-white rounded-lg hover:shadow-[0_0_0_1px_white] dark:hover:shadow-[0_0_0_1px_white]"
 	>
 		<a
 			href="/"
@@ -41,7 +41,7 @@ const { registry } = Astro.props;
 		</button>
 	</div>
 
-	<ThemeIcon />
+	<ThemeToggle client:load />
 </header>
 
 <script>

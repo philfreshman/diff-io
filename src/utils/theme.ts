@@ -1,39 +1,43 @@
-export function applyTheme(doc: Document = document) {
-	const localStorageTheme = localStorage.getItem("theme") || "dark";
-	const systemTheme = window.matchMedia("(prefers-color-scheme: dark)").matches
+export type ThemeSelection = "light" | "dark" | "system";
+
+export function getResolvedTheme(): "light" | "dark" {
+	const selection = getThemeSelection();
+	if (selection !== "system") return selection;
+	return window.matchMedia("(prefers-color-scheme: dark)").matches
 		? "dark"
 		: "light";
-	const theme =
-		localStorageTheme !== "system" ? localStorageTheme : systemTheme;
-
-	doc.documentElement.setAttribute("data-theme", theme);
-	doc.documentElement.setAttribute("data-theme-selection", localStorageTheme);
 }
 
-export function toggleTheme() {
-	const themes = ["light", "dark", "system"];
-	const currentTheme = localStorage.getItem("theme") || "dark";
-	const nextTheme = themes[(themes.indexOf(currentTheme) + 1) % themes.length];
-	localStorage.setItem("theme", nextTheme);
+export function getThemeSelection(): ThemeSelection {
+	return (localStorage.getItem("theme") as ThemeSelection) || "dark";
+}
+
+export function applyTheme(doc?: Document) {
+	if (typeof document === "undefined") return;
+	const activeDoc = doc || document;
+	const selection = getThemeSelection();
+	const resolved = getResolvedTheme();
+	activeDoc.documentElement.setAttribute("data-theme", resolved);
+	activeDoc.documentElement.setAttribute("data-theme-selection", selection);
+}
+
+export function cycleTheme(): ThemeSelection {
+	const themes: ThemeSelection[] = ["light", "dark", "system"];
+	const current = getThemeSelection();
+	const next = themes[(themes.indexOf(current) + 1) % themes.length];
+	localStorage.setItem("theme", next);
 	applyTheme();
+	return next;
 }
 
-applyTheme();
-
-// Apply theme to the incoming document BEFORE it's swapped in — prevents white flash
-document.addEventListener("astro:before-swap", (e) => {
-	applyTheme(e.newDocument);
-});
-
-// Listen for system changes
-window
-	.matchMedia("(prefers-color-scheme: dark)")
-	.addEventListener("change", (e) => {
-		const localStorageTheme = localStorage.getItem("theme") || "dark";
-		if (localStorageTheme === "system") {
-			document.documentElement.setAttribute(
-				"data-theme",
-				e.matches ? "dark" : "light",
-			);
-		}
-	});
+if (typeof window !== "undefined") {
+	applyTheme();
+	document.addEventListener("astro:before-swap", (e: any) =>
+		applyTheme(e.newDocument),
+	);
+	window
+		.matchMedia("(prefers-color-scheme: dark)")
+		.addEventListener("change", () => {
+			if (getThemeSelection() === "system") applyTheme();
+		});
+}

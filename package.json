@@ -11,13 +11,20 @@
 		"format": "bunx biome check --write"
 	},
 	"dependencies": {
+		"@astrojs/check": "^0.9.6",
+		"@astrojs/react": "^4.4.2",
+		"@types/react": "^19.2.14",
+		"@types/react-dom": "^19.2.3",
 		"@vercel/analytics": "^1.6.1",
 		"astro": "5.17.2",
+		"diff-wasm": "file:./wasm/diff-wasm/pkg",
 		"highlight.js": "^11.11.1",
-		"diff-wasm": "file:./wasm/diff-wasm/pkg"
+		"react": "^19.2.4",
+		"react-dom": "^19.2.4",
+		"typescript": "^5.9.3"
 	},
 	"devDependencies": {
-		"@biomejs/biome": "2.4.0",
+		"@biomejs/biome": "2.4.6",
 		"@tailwindcss/vite": "4.1.18",
 		"tailwindcss": "4.1.18",
 		"wasm-pack": "^0.14.0"

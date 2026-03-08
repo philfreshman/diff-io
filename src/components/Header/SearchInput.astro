@@ -1,6 +1,6 @@
 ---
-import ResetIcon from "../Icons/ResetIcon.astro";
-import SearchIcon from "../Icons/SearchIcon.astro";
+import ResetIcon from "../Icons/ResetIcon.tsx";
+import SearchIcon from "../Icons/SearchIcon.tsx";
 
 interface Props {
 	registry: string;
@@ -33,7 +33,7 @@ const { registry } = Astro.props;
 		></div>
 	</div>
 	<div id="search-icon" class="absolute right-3 top-1/2 -translate-y-1/2">
-		<SearchIcon class="w-4 h-4 text-neutral-400 dark:text-neutral-500" />
+		<SearchIcon className="w-4 h-4 text-neutral-400 dark:text-neutral-500" />
 	</div>
 	<button
 		id="search-reset"
@@ -42,7 +42,7 @@ const { registry } = Astro.props;
 		aria-label="Reset search"
 	>
 		<ResetIcon
-			class="w-4 h-4 text-neutral-400 hover:text-neutral-600 dark:text-neutral-500 dark:hover:text-neutral-300"
+			className="w-4 h-4 text-neutral-400 hover:text-neutral-600 dark:text-neutral-500 dark:hover:text-neutral-300"
 		/>
 	</button>
 </div>
