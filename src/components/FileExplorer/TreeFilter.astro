@@ -1,14 +1,14 @@
 ---
-import FilterIcon from "../Icons/FilterIcon.astro";
-import SearchIcon from "../Icons/SearchIcon.astro";
+import FilterIcon from "../Icons/FilterIcon.tsx";
+import SearchIcon from "../Icons/SearchIcon.tsx";
 ---
 
 <div class="relative mb-3 flex items-center gap-2">
 	<div class="relative flex-1">
 		<SearchIcon
-			class="absolute left-2 top-1/2 transform -translate-y-1/2 w-4 h-4 text-neutral-400 dark:text-neutral-500"
+			className="absolute left-2 top-1/2 transform -translate-y-1/2 w-4 h-4 text-neutral-400 dark:text-neutral-500"
 		/>
-		<label for="tree-filter" class="sr-only"/>
+		<label for="tree-filter" class="sr-only" />
 		<input
 			type="text"
 			id="tree-filter"
@@ -17,11 +17,12 @@ import SearchIcon from "../Icons/SearchIcon.astro";
 		>
 	</div>
 	<button
+		type="button"
 		id="toggle-modified"
 		class="p-2 hover:bg-neutral-100 dark:hover:bg-neutral-800 rounded-md border border-neutral-300 dark:border-neutral-700 transition-colors"
 		title="Toggle show only modified files"
 	>
-		<FilterIcon class="m-0.5 w-4 h-4"/>
+		<FilterIcon className="m-0.5 w-4 h-4" />
 	</button>
 	<script is:inline>
 		(() => {
@@ -33,10 +34,7 @@ import SearchIcon from "../Icons/SearchIcon.astro";
 				storedValue === null ? true : storedValue !== "false";
 
 			if (showOnlyModified) {
-				toggleButton.classList.add(
-					"text-neutral-400",
-					"dark:text-neutral-500",
-				);
+				toggleButton.classList.add("text-neutral-400", "dark:text-neutral-500");
 			} else {
 				toggleButton.classList.add(
 					"bg-blue-50",

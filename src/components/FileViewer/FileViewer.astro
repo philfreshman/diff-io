@@ -2,11 +2,11 @@
 import DiffArea from "./DiffArea.astro";
 import ExpandAllContentButton from "./ExpandAllContentButton.astro";
 import ExpandButton from "./ExpandButton.astro";
-import Toolbar from "./Toolbar.astro";
+import Toolbar from "./Toolbar.js";
 ---
 
 <div class="flex flex-col h-full bg-white dark:bg-neutral-950">
-	<Toolbar />
+	<Toolbar client:load />
 	<DiffArea />
 </div>
 
@@ -29,7 +29,6 @@ import Toolbar from "./Toolbar.astro";
 	let diffContainer = document.getElementById("diff-container");
 	let diffFilename = document.getElementById("diff-filename");
 	let diffContent = document.getElementById("diff-content");
-	let languageBadge = document.getElementById("language-badge");
 	let loadingOverlay = document.getElementById("loading-overlay");
 	let scrollbarTrack = document.getElementById("scrollbar-track");
 	let scrollbarThumb = document.getElementById("scrollbar-thumb");
@@ -75,7 +74,6 @@ import Toolbar from "./Toolbar.astro";
 		diffContainer = document.getElementById("diff-container");
 		diffFilename = document.getElementById("diff-filename");
 		diffContent = document.getElementById("diff-content");
-		languageBadge = document.getElementById("language-badge");
 		loadingOverlay = document.getElementById("loading-overlay");
 		scrollbarTrack = document.getElementById("scrollbar-track");
 		scrollbarThumb = document.getElementById("scrollbar-thumb");
@@ -108,6 +106,7 @@ import Toolbar from "./Toolbar.astro";
 
 	initFileViewer();
 	document.addEventListener("astro:page-load", initFileViewer);
+	window.addEventListener("toolbar-ready", initFileViewer);
 
 	interface DiffLine {
 		type: "added" | "deleted" | "unchanged" | "hunk";
@@ -121,6 +120,7 @@ import Toolbar from "./Toolbar.astro";
 	let currentIsDiff = false;
 	let currentDetectedLang: string | null = null;
 	let currentLangLabel = "";
+	let isSplitView = false;
 
 	const CLASSES = {
 		row: "flex leading-6 whitespace-pre-wrap break-all",
@@ -233,7 +233,7 @@ import Toolbar from "./Toolbar.astro";
 
 		const contentRect = content.getBoundingClientRect();
 		const rows = content.querySelectorAll(
-			'[data-type="added"], [data-type="deleted"]',
+			'[data-type="added"], [data-type="deleted"], [data-type="modified"]',
 		);
 		const fragment = document.createDocumentFragment();
 
@@ -253,6 +253,8 @@ import Toolbar from "./Toolbar.astro";
 
 			if (htmlRow.dataset.type === "added") {
 				marker.classList.add("bg-[#e6ffec]", "dark:bg-[#233329]");
+			} else if (htmlRow.dataset.type === "modified") {
+				marker.classList.add("bg-orange-100", "dark:bg-orange-900/50");
 			} else {
 				marker.classList.add("bg-[#ffeef0]", "dark:bg-[#442d30]");
 			}
@@ -270,10 +272,6 @@ import Toolbar from "./Toolbar.astro";
 		diffContainer?.classList.add("hidden");
 		if (diffFilename) diffFilename.textContent = "";
 		if (diffContent) diffContent.innerHTML = "";
-		if (languageBadge) {
-			languageBadge.textContent = "";
-			languageBadge.classList.add("hidden");
-		}
 		if (scrollbarMarkers) scrollbarMarkers.innerHTML = "";
 		updateScrollbarThumb();
 	}
@@ -387,20 +385,78 @@ import Toolbar from "./Toolbar.astro";
 		currentDetectedLang = detectLanguageSample();
 		currentLangLabel = currentDetectedLang || "text";
 
-		if (languageBadge) {
-			languageBadge.textContent = currentLangLabel;
-			languageBadge.classList.remove("hidden");
-		}
 
 		applyExpandedState(filename);
 		renderDiffContent();
 
 		if (diffContent) {
 			const content = diffContent;
-			if (scrollPositions.has(filename)) {
-				content.scrollTop = scrollPositions.get(filename)!;
+			content.scrollTop = scrollPositions.get(filename) ?? 0;
+		}
+	}
+
+	function renderUnifiedDiffLoop(isVisible: boolean[]) {
+		if (!diffContent) return;
+
+		for (let i = 0; i < currentProcessedLines.length; i++) {
+			if (isVisible[i]) {
+				const line = currentProcessedLines[i];
+				const row = createDiffRow(line);
+				diffContent.appendChild(row);
 			} else {
-				content.scrollTop = 0;
+				const start = i;
+				while (i < currentProcessedLines.length && !isVisible[i]) {
+					i++;
+				}
+				const end = i - 1;
+				const collapsedRow = createCollapsedRow(start, end);
+				diffContent.appendChild(collapsedRow);
+				i--;
+			}
+		}
+	}
+
+	function renderSplitDiffLoop(isVisible: boolean[]) {
+		if (!diffContent) return;
+		for (let i = 0; i < currentProcessedLines.length; i++) {
+			if (isVisible[i]) {
+				let line = currentProcessedLines[i];
+				if (line.type === "deleted" || line.type === "added") {
+					let deletedLines: DiffLine[] = [];
+					let addedLines: DiffLine[] = [];
+					let j = i;
+					while (
+						j < currentProcessedLines.length &&
+						isVisible[j] &&
+						(currentProcessedLines[j].type === "deleted" ||
+							currentProcessedLines[j].type === "added")
+					) {
+						if (currentProcessedLines[j].type === "deleted") {
+							deletedLines.push(currentProcessedLines[j]);
+						} else {
+							addedLines.push(currentProcessedLines[j]);
+						}
+						j++;
+					}
+					const maxRows = Math.max(deletedLines.length, addedLines.length);
+					for (let r = 0; r < maxRows; r++) {
+						const lLine = deletedLines[r] || null;
+						const rLine = addedLines[r] || null;
+						diffContent.appendChild(createSplitDiffRow(lLine, rLine));
+					}
+					i = j - 1;
+				} else {
+					diffContent.appendChild(createSplitDiffRow(line, line));
+				}
+			} else {
+				const start = i;
+				while (i < currentProcessedLines.length && !isVisible[i]) {
+					i++;
+				}
+				const end = i - 1;
+				const collapsedRow = createCollapsedRow(start, end);
+				diffContent.appendChild(collapsedRow);
+				i--;
 			}
 		}
 	}
@@ -428,21 +484,10 @@ import Toolbar from "./Toolbar.astro";
 			});
 		}
 
-		for (let i = 0; i < currentProcessedLines.length; i++) {
-			if (isVisible[i]) {
-				const line = currentProcessedLines[i];
-				const row = createDiffRow(line);
-				diffContent.appendChild(row);
-			} else {
-				const start = i;
-				while (i < currentProcessedLines.length && !isVisible[i]) {
-					i++;
-				}
-				const end = i - 1;
-				const collapsedRow = createCollapsedRow(start, end);
-				diffContent.appendChild(collapsedRow);
-				i--;
-			}
+		if (isSplitView && currentIsDiff) {
+			renderSplitDiffLoop(isVisible);
+		} else {
+			renderUnifiedDiffLoop(isVisible);
 		}
 
 		updateScrollbarThumb();
@@ -576,6 +621,88 @@ import Toolbar from "./Toolbar.astro";
 		return row;
 	}
 
+	function createSplitCell(lineObj: DiffLine | null, side: "left" | "right") {
+		const half = document.createElement("div");
+		half.className = `flex w-1/2 overflow-hidden${side === "left" ? " border-r border-neutral-100 dark:border-[#30363d]" : ""}`;
+
+		if (!lineObj) {
+			half.className += " bg-neutral-50 dark:bg-[#0d1117]";
+			return half;
+		}
+
+		const num = document.createElement("div");
+		num.className = CLASSES.lineNumber;
+
+		const content = document.createElement("div");
+		content.className = CLASSES.content;
+
+		if (lineObj.type === "hunk") {
+			half.className += ` ${CLASSES.rowHunk}`;
+			num.className += ` ${CLASSES.lineNumberHunk}`;
+			num.textContent = "...";
+			content.textContent = lineObj.line;
+		} else {
+			if (lineObj.type === "deleted" && side === "left") {
+				half.className += ` ${CLASSES.rowDeleted}`;
+				num.className += ` ${CLASSES.lineNumberDeleted}`;
+				content.className += " bg-transparent!";
+			} else if (lineObj.type === "added" && side === "right") {
+				half.className += ` ${CLASSES.rowAdded}`;
+				num.className += ` ${CLASSES.lineNumberAdded}`;
+				content.className += " bg-transparent!";
+			} else if (lineObj.type === "unchanged") {
+				// Keep default
+			}
+
+			num.textContent =
+				(side === "left" ? lineObj.oldNum : lineObj.newNum)?.toString() || "";
+
+			const displayLine = currentIsDiff
+				? stripDiffPrefix(lineObj.line)
+				: lineObj.line;
+			const language = currentDetectedLang;
+			if (language && hljs.getLanguage(language)) {
+				content.innerHTML = hljs.highlight(displayLine || " ", {
+					language,
+					ignoreIllegals: true,
+				}).value;
+			} else {
+				content.innerHTML = hljs.highlightAuto(displayLine || " ").value;
+			}
+		}
+
+		half.appendChild(num);
+		half.appendChild(content);
+		return half;
+	}
+
+	function createSplitDiffRow(
+		leftLine: DiffLine | null,
+		rightLine: DiffLine | null,
+	) {
+		const row = document.createElement("div");
+		row.className = CLASSES.row;
+
+		if (leftLine && !rightLine) row.dataset.type = "deleted";
+		else if (!leftLine && rightLine) row.dataset.type = "added";
+		else if (
+			leftLine &&
+			rightLine &&
+			leftLine.type !== rightLine.type &&
+			leftLine.type !== "unchanged"
+		)
+			row.dataset.type = "modified";
+		else if (leftLine && leftLine.type === "hunk") row.dataset.type = "hunk";
+
+		const leftHalf = createSplitCell(leftLine, "left");
+		const rightHalf = createSplitCell(rightLine, "right");
+
+		row.appendChild(leftHalf);
+		row.appendChild(rightHalf);
+
+		return row;
+	}
+
 	function stripDiffPrefix(line: string) {
 		if (line.startsWith("+") || line.startsWith("-") || line.startsWith(" ")) {
 			return line.slice(1);
@@ -670,6 +797,11 @@ import Toolbar from "./Toolbar.astro";
 			line.forceVisible = false;
 		});
 		saveExpandedState();
+		renderDiffContent();
+	});
+	window.addEventListener("toggle-split-view", (e) => {
+		const customEvent = e as CustomEvent<boolean>;
+		isSplitView = customEvent.detail;
 		renderDiffContent();
 	});
 	window.addEventListener("file-diff", (e) => {
