@@ -1,26 +1,42 @@
 ---
 import FoldIcon from "../Icons/FoldIcon.astro";
+import SplitIcon from "../Icons/SplitIcon.astro";
 import UnfoldIcon from "../Icons/UnfoldIcon.astro";
+import UnifiedIcon from "../Icons/UnifiedIcon.astro";
 import ThemeSelect from "./ThemeSelect.astro";
 ---
 
 <div
-	class="w-full h-[38px] mb-3 bg-white dark:bg-neutral-950 border border-neutral-300 dark:border-neutral-700 rounded-md flex items-center px-3 justify-between"
+	class="w-full h-9.5 mb-3 bg-white dark:bg-neutral-950 border border-neutral-300 dark:border-neutral-700 rounded-md flex items-center px-3 justify-between"
 >
 	<div class="flex items-center gap-4">
 		<div
 			class="flex items-center gap-2 border-r border-neutral-300 dark:border-neutral-700 pr-4 mr-2"
 		>
 			<button
-				id="expand-all-btn"
-				class="p-1.5 rounded-md hover:bg-neutral-100 dark:hover:bg-neutral-800 text-neutral-600 dark:text-neutral-400 transition-colors"
-				title="Expand all"
+					id="expand-all-btn"
+					type="button"
+					class="p-1.5 rounded-md hover:bg-neutral-100 dark:hover:bg-neutral-800 text-neutral-600 dark:text-neutral-400 transition-colors"
+					title="Expand all"
 			>
 				<span id="unfold-icon-wrapper">
 					<UnfoldIcon />
 				</span>
 				<span id="fold-icon-wrapper" class="hidden">
 					<FoldIcon />
+				</span>
+			</button>
+			<button
+					id="split-view-btn"
+					type="button"
+					class="p-1.5 rounded-md hover:bg-neutral-100 dark:hover:bg-neutral-800 text-neutral-600 dark:text-neutral-400 transition-colors"
+					title="Switch to split view"
+			>
+				<span id="split-icon-wrapper">
+					<SplitIcon />
+				</span>
+				<span id="unified-icon-wrapper" class="hidden">
+					<UnifiedIcon />
 				</span>
 			</button>
 		</div>
@@ -42,7 +58,12 @@ import ThemeSelect from "./ThemeSelect.astro";
 		const unfoldIconWrapper = document.getElementById("unfold-icon-wrapper");
 		const foldIconWrapper = document.getElementById("fold-icon-wrapper");
 
+		const splitViewBtn = document.getElementById("split-view-btn");
+		const splitIconWrapper = document.getElementById("split-icon-wrapper");
+		const unifiedIconWrapper = document.getElementById("unified-icon-wrapper");
+
 		let isExpanded = false;
+		let isSplitView = false;
 
 		function updateIcon() {
 			if (isExpanded) {
@@ -56,6 +77,18 @@ import ThemeSelect from "./ThemeSelect.astro";
 			}
 		}
 
+		function updateSplitIcon() {
+			if (isSplitView) {
+				splitIconWrapper?.classList.add("hidden");
+				unifiedIconWrapper?.classList.remove("hidden");
+				if (splitViewBtn) splitViewBtn.title = "Switch to unified view";
+			} else {
+				splitIconWrapper?.classList.remove("hidden");
+				unifiedIconWrapper?.classList.add("hidden");
+				if (splitViewBtn) splitViewBtn.title = "Switch to split view";
+			}
+		}
+
 		expandAllBtn?.addEventListener("click", () => {
 			isExpanded = !isExpanded;
 			updateIcon();
@@ -64,6 +97,12 @@ import ThemeSelect from "./ThemeSelect.astro";
 			} else {
 				window.dispatchEvent(new CustomEvent("fold-all-diff"));
 			}
+		});
+
+		splitViewBtn?.addEventListener("click", () => {
+			isSplitView = !isSplitView;
+			updateSplitIcon();
+			window.dispatchEvent(new CustomEvent("toggle-split-view", { detail: isSplitView }));
 		});
 
 		window.addEventListener("file-diff", () => {
