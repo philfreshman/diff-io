@@ -9,16 +9,11 @@ export default function SplitViewButton({
 }: {
 	onToggle?: (value: boolean) => void;
 }) {
-	const [isSplitView, setIsSplitView] = useState(() => {
-		if (typeof window !== "undefined") {
-			return localStorage.getItem(STORAGE_KEY) === "true";
-		}
-		return false;
-	});
+	const [isSplitView, setIsSplitView] = useState(false);
 
-	const applyPreference = useCallback(
+	const notifyPreference = useCallback(
 		(value: boolean) => {
-			localStorage.setItem(STORAGE_KEY, String(value));
+			if (typeof window === "undefined") return;
 			window.dispatchEvent(
 				new CustomEvent("toggle-split-view", { detail: value }),
 			);
@@ -27,15 +22,27 @@ export default function SplitViewButton({
 		[onToggle],
 	);
 
-	// biome-ignore lint/correctness/useExhaustiveDependencies: Run only once
+	const persistPreference = useCallback(
+		(value: boolean) => {
+			if (typeof window === "undefined") return;
+			localStorage.setItem(STORAGE_KEY, String(value));
+			notifyPreference(value);
+		},
+		[notifyPreference],
+	);
+
 	useEffect(() => {
-		applyPreference(isSplitView);
-	}, []);
+		if (typeof window === "undefined") return;
+		const stored = localStorage.getItem(STORAGE_KEY);
+		const initial = stored === "true";
+		setIsSplitView(initial);
+		notifyPreference(initial);
+	}, [notifyPreference]);
 
 	const handleClick = () => {
 		const next = !isSplitView;
 		setIsSplitView(next);
-		applyPreference(next);
+		persistPreference(next);
 	};
 
 	return (
