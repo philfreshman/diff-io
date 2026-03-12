@@ -1,0 +1,3 @@
+bun tsc && \
+bun run lint && \
+bun run format

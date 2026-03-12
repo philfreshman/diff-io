@@ -9,7 +9,7 @@
 		"wasm"
 	],
 	"compilerOptions": {
-		"types": ["astro/client", "vite/client"],
+		"types": ["node", "astro/client", "vite/client"],
 		"jsx": "react-jsx",
 		"jsxImportSource": "react"
 	}

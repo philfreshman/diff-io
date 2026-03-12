@@ -8,7 +8,8 @@
 		"build": "bun run prepare && astro build",
 		"preview": "astro build && astro preview",
 		"astro": "astro",
-		"format": "bunx biome check --write"
+		"format": "biome format .",
+		"lint": "biome lint ."
 	},
 	"dependencies": {
 		"@astrojs/check": "^0.9.6",
@@ -26,6 +27,8 @@
 	"devDependencies": {
 		"@biomejs/biome": "2.4.6",
 		"@tailwindcss/vite": "4.1.18",
+		"@types/node": "^25.4.0",
+		"husky": "^9.1.7",
 		"tailwindcss": "4.1.18",
 		"wasm-pack": "^0.14.0"
 	}
