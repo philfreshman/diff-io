@@ -43,13 +43,15 @@ const THEMES: ThemeGroup[] = [
 
 const THEME_STORAGE_KEY = "highlight_theme";
 
-// Typing for Vite's glob import with ?raw query
 const themes = import.meta.glob<true, string, { default: string }>(
 	["/node_modules/highlight.js/styles/**/*.css"],
 	{ query: "?raw", eager: true },
 );
 
-async function updateHighlightTheme(theme: string, themeStyle: HTMLStyleElement) {
+async function updateHighlightTheme(
+	theme: string,
+	themeStyle: HTMLStyleElement,
+) {
 	if (theme === "nightfall") {
 		const response = await fetch("/nightfall.css");
 		if (!response.ok) {
@@ -107,8 +109,7 @@ export default function HighlightThemeSelect() {
 
 	function handleChange(e: ChangeEvent<HTMLSelectElement>) {
 		const newTheme = e.target.value;
-		const storage =
-			typeof window !== "undefined" ? window.localStorage : null;
+		const storage = typeof window !== "undefined" ? window.localStorage : null;
 		if (storage && typeof storage.setItem === "function") {
 			storage.setItem(THEME_STORAGE_KEY, newTheme);
 		}

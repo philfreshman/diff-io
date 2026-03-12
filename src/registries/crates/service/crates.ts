@@ -22,7 +22,9 @@ export class CratesRegistryService implements CratesService {
 	}
 
 	async getVersions(name: string): Promise<string[]> {
-		const res = await fetch(`https://crates.io/api/v1/crates/${encodeURIComponent(name)}`);
+		const res = await fetch(
+			`https://crates.io/api/v1/crates/${encodeURIComponent(name)}`,
+		);
 		if (!res.ok) throw new Error("Failed to fetch versions");
 		const data = await res.json();
 		interface CrateVersion {

@@ -1,5 +1,9 @@
 import { backend } from "../../../utils/backend.ts";
-import type { PackageVersion, SearchResult } from "../../types.ts";
+import type {
+	DepsDevVersionsResponse,
+	PackageVersion,
+	SearchResult,
+} from "../../types.ts";
 import type { RubyGemsService } from "../domain/base.ts";
 
 export class RubyGemsRegistryService implements RubyGemsService {
@@ -13,8 +17,8 @@ export class RubyGemsRegistryService implements RubyGemsService {
 		);
 
 		if (!res.ok) throw new Error(`Failed to fetch versions for ${name}`);
-		const data = await res.json();
-		return data.versions.map((v: any) => v.versionKey.version).reverse();
+		const data: DepsDevVersionsResponse = await res.json();
+		return data.versions.map((version) => version.versionKey.version).reverse();
 	}
 
 	async getVersion(name: string, version: string): Promise<PackageVersion> {

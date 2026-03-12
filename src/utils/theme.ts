@@ -32,9 +32,13 @@ export function cycleTheme(): ThemeSelection {
 
 if (typeof window !== "undefined") {
 	applyTheme();
-	document.addEventListener("astro:before-swap", (e: any) =>
-		applyTheme(e.newDocument),
-	);
+	type AstroBeforeSwapEvent = Event & { newDocument: Document };
+	document.addEventListener("astro:before-swap", (event) => {
+		const beforeSwapEvent = event as AstroBeforeSwapEvent;
+		if (beforeSwapEvent.newDocument) {
+			applyTheme(beforeSwapEvent.newDocument);
+		}
+	});
 	window
 		.matchMedia("(prefers-color-scheme: dark)")
 		.addEventListener("change", () => {

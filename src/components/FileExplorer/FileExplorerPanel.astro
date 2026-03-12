@@ -588,7 +588,7 @@ import TreeList from "./TreeList.astro";
 		const rows = getVisibleRows();
 		if (rows.length === 0) return;
 
-		const currentIndex = rows.findIndex((row) => row === targetRow);
+		const currentIndex = rows.indexOf(targetRow);
 		const currentDepth = Number.parseInt(targetRow.dataset.depth || "0", 10);
 		const hasChildren = targetRow.dataset.hasChildren === "true";
 		const isExpanded = targetRow.dataset.expanded === "true";

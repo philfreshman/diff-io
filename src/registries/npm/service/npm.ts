@@ -24,7 +24,9 @@ export class NPMRegistryService implements NPMService {
 	}
 
 	async getVersions(name: string): Promise<string[]> {
-		const res = await fetch(`https://registry.npmjs.org/${encodeURIComponent(name)}`);
+		const res = await fetch(
+			`https://registry.npmjs.org/${encodeURIComponent(name)}`,
+		);
 		if (!res.ok) throw new Error("Failed to fetch versions");
 		const data = await res.json();
 		return Object.keys(data.versions).reverse();

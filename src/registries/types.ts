@@ -21,3 +21,7 @@ export type PackageVersion = {
 	version: string;
 	files?: Record<string, string>;
 };
+
+export type DepsDevVersionsResponse = {
+	versions: Array<{ versionKey: { version: string } }>;
+};
