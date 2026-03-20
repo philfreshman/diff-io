@@ -13,11 +13,11 @@
 	},
 	"dependencies": {
 		"@astrojs/check": "^0.9.6",
-		"@astrojs/react": "^4.4.2",
+		"@astrojs/react": "^5.0.0",
 		"@types/react": "^19.2.14",
 		"@types/react-dom": "^19.2.3",
 		"@vercel/analytics": "^1.6.1",
-		"astro": "5.17.2",
+		"astro": "6.0.8",
 		"diff-wasm": "file:./wasm/diff-wasm/pkg",
 		"highlight.js": "^11.11.1",
 		"react": "^19.2.4",
