@@ -40,7 +40,6 @@ bun run build
 - **npm** - JavaScript & TypeScript packages
 - **crates.io** - Rust ecosystem packages
 - **PyPi** - Python ecosystem packages
-- **rubygems** - Ruby ecosystem packages
 
 🚧 More registries coming soon. 🚧
 

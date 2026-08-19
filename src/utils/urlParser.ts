@@ -15,10 +15,7 @@ export function parseUrl(pathname: string): UrlState {
 	}
 
 	const isKnownRegistry =
-		parts[0] === "npm" ||
-		parts[0] === "crates" ||
-		parts[0] === "pypi" ||
-		parts[0] === "rubygems";
+		parts[0] === "npm" || parts[0] === "crates" || parts[0] === "pypi";
 	const registry = isKnownRegistry ? parts[0] : "npm";
 	const remainingParts = isKnownRegistry ? parts.slice(1) : parts;
 
