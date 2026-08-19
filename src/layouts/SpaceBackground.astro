@@ -8,7 +8,9 @@ const { showGradient = false } = Astro.props;
 		top: 0;
 		left: 0;
 		width: 100%;
-		height: 100%;
+		/* dvh tracks the visible viewport as mobile browser toolbars collapse,
+		   so the gradient never leaves a gap at the top or bottom. */
+		height: 100dvh;
 		background:
 			radial-gradient(
 				ellipse at 20% 30%,
@@ -95,6 +97,16 @@ const { showGradient = false } = Astro.props;
 	}
 
 	#starfield {
+		/* Contained to the visible viewport so stars near the bottom edge cannot
+		   add scrollable overflow — on mobile that stray scroll makes the browser
+		   toolbar collapse and expand. */
+		position: fixed;
+		top: 0;
+		left: 0;
+		width: 100%;
+		height: 100dvh;
+		overflow: hidden;
+		pointer-events: none;
 		animation: starfieldFadeIn 1s ease-in forwards;
 	}
 	@keyframes starfieldFadeIn {
