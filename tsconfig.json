@@ -11,6 +11,10 @@
 	"compilerOptions": {
 		"types": ["node", "astro/client", "vite/client"],
 		"jsx": "react-jsx",
-		"jsxImportSource": "react"
+		"jsxImportSource": "react",
+		"paths": {
+			"diff-wasm": ["./wasm/diff-wasm/pkg"],
+			"diff-wasm/*": ["./wasm/diff-wasm/pkg/*"]
+		}
 	}
 }

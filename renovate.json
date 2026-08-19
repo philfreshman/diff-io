@@ -7,10 +7,28 @@
 		"Checklist": "- [ ]",
 		"Diffpack": "[{{{currentVersion}}} → {{{newVersion}}}](https://www.diffpack.io/{{{datasource}}}/{{{depName}}}/{{{currentVersion}}}/{{{newVersion}}})"
 	},
+	"lockFileMaintenance": {
+		"enabled": true,
+		"schedule": ["before 5am on the 1st day of the month"]
+	},
 	"packageRules": [
 		{
 			"labels": ["dependency-update"],
 			"matchPackageNames": ["*"]
+		},
+		{
+			"groupName": "react",
+			"matchPackageNames": [
+				"react",
+				"react-dom",
+				"@types/react",
+				"@types/react-dom"
+			]
+		},
+		{
+			"description": "@astrojs/check pins its typescript peer, so hold typescript back until it supports the next major",
+			"matchPackageNames": ["typescript"],
+			"allowedVersions": "<7"
 		}
 	],
 	"customManagers": [
