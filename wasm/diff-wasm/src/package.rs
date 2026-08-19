@@ -36,11 +36,7 @@ pub async fn fetch_and_extract_package(
             fetch_bytes(&url).await?
         }
     };
-    if registry == "rubygems" {
-        extract_gem_bytes(&bytes)
-    } else {
-        extract_archive_bytes(&bytes)
-    }
+    extract_archive_bytes(&bytes)
 }
 
 fn build_tarball_url(registry: &str, pkg: &str, version: &str) -> Result<String, JsValue> {
@@ -54,8 +50,6 @@ fn build_tarball_url(registry: &str, pkg: &str, version: &str) -> Result<String,
         "crates" => Ok(format!(
             "https://static.crates.io/crates/{pkg}/{pkg}-{version}.crate"
         )),
-
-        "rubygems" => Ok(format!("https://api.diffpack.io/api/download?package={pkg}&version={version}&registry=rubygems")),
         _ => Err(JsValue::from_str(&format!(
             "Unsupported registry: {registry}"
         ))),
@@ -143,69 +137,6 @@ fn is_supported_archive_url(url: &str) -> bool {
         || lower.ends_with(".whl")
 }
 
-fn extract_gem_bytes(bytes: &[u8]) -> Result<HashMap<String, FileMapEntry>, JsValue> {
-    let mut archive = Archive::new(Cursor::new(bytes));
-    let entries = archive
-        .entries()
-        .map_err(|err| JsValue::from_str(&format!("Gem tar parsing failed: {err}")))?;
-
-    let mut data_tar = None;
-    let mut aux_files = HashMap::new();
-
-    for entry in entries {
-        let mut entry =
-            entry.map_err(|err| JsValue::from_str(&format!("Gem tar entry error: {err}")))?;
-        let path = entry
-            .path()
-            .map_err(|err| JsValue::from_str(&format!("Gem tar path error: {err}")))?;
-
-        let path_str = path.to_string_lossy();
-        if path_str == "data.tar.gz" || path_str == "data.tar" {
-            let mut data_tar_bytes = Vec::new();
-            entry
-                .read_to_end(&mut data_tar_bytes)
-                .map_err(|err| JsValue::from_str(&format!("Failed to read data.tar.gz: {err}")))?;
-            data_tar = Some(data_tar_bytes);
-        } else if path_str == "metadata.gz" {
-            let mut raw = Vec::new();
-            entry
-                .read_to_end(&mut raw)
-                .map_err(|err| JsValue::from_str(&format!("Failed to read metadata.gz: {err}")))?;
-            let content = decode_gzip_or_utf8(&raw, "metadata.gz")?;
-            aux_files.insert(
-                "metadata.yml".to_string(),
-                FileMapEntry {
-                    file_type: FileType::File,
-                    content,
-                },
-            );
-        } else if path_str == "checksums.yaml.gz" || path_str == "checksums.yaml" {
-            let mut raw = Vec::new();
-            entry.read_to_end(&mut raw).map_err(|err| {
-                JsValue::from_str(&format!("Failed to read checksums.yaml: {err}"))
-            })?;
-            let content = decode_gzip_or_utf8(&raw, "checksums.yaml")?;
-            aux_files.insert(
-                "checksums.yaml".to_string(),
-                FileMapEntry {
-                    file_type: FileType::File,
-                    content,
-                },
-            );
-        }
-    }
-
-    if let Some(data_tar_bytes) = data_tar {
-        let mut data_files = extract_archive_bytes(&data_tar_bytes)?;
-        data_files.extend(aux_files);
-        Ok(data_files)
-    } else {
-        Err(JsValue::from_str(
-            "data.tar.gz or data.tar not found in .gem file",
-        ))
-    }
-}
-
 fn extract_archive_bytes(bytes: &[u8]) -> Result<HashMap<String, FileMapEntry>, JsValue> {
     if is_gzip(bytes) {
         let mut decoder = GzDecoder::new(bytes);
@@ -221,19 +152,6 @@ fn extract_archive_bytes(bytes: &[u8]) -> Result<HashMap<String, FileMapEntry>, 
     }
 
     parse_tar_bytes(bytes)
-}
-
-fn decode_gzip_or_utf8(bytes: &[u8], label: &str) -> Result<String, JsValue> {
-    if is_gzip(bytes) {
-        let mut decoder = GzDecoder::new(bytes);
-        let mut decompressed = Vec::new();
-        decoder
-            .read_to_end(&mut decompressed)
-            .map_err(|err| JsValue::from_str(&format!("Gzip decompression failed for {label}: {err}")))?;
-        Ok(String::from_utf8_lossy(&decompressed).into_owned())
-    } else {
-        Ok(String::from_utf8_lossy(bytes).into_owned())
-    }
 }
 
 fn parse_tar_bytes(bytes: &[u8]) -> Result<HashMap<String, FileMapEntry>, JsValue> {
