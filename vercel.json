@@ -1,12 +1,6 @@
 {
 	"installCommand": "rustup target add wasm32-unknown-unknown && bun run build:wasm && bun install",
 	"buildCommand": "bun run build",
-	"rewrites": [
-		{ "source": "/npm/(.*)", "destination": "/npm" },
-		{ "source": "/crates/(.*)", "destination": "/crates" },
-		{ "source": "/go/(.*)", "destination": "/go" },
-		{ "source": "/pypi/(.*)", "destination": "/pypi" }
-	],
 	"cleanUrls": true,
 	"trailingSlash": false,
 	"redirects": [

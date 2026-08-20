@@ -10,11 +10,19 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as RegistryRouteRouteImport } from './routes/$registry/route'
 import { Route as SpikeRouteImport } from './routes/spike'
+import { Route as RegistryIndexRouteImport } from './routes/$registry/index'
+import { Route as RegistrySplatRouteImport } from './routes/$registry/$'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const RegistryRouteRoute = RegistryRouteRouteImport.update({
+  id: '/$registry',
+  path: '/$registry',
   getParentRoute: () => rootRouteImport,
 } as any)
 const SpikeRoute = SpikeRouteImport.update({
@@ -22,30 +30,55 @@ const SpikeRoute = SpikeRouteImport.update({
   path: '/spike',
   getParentRoute: () => rootRouteImport,
 } as any)
+const RegistryIndexRoute = RegistryIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => RegistryRouteRoute,
+} as any)
+const RegistrySplatRoute = RegistrySplatRouteImport.update({
+  id: '/$',
+  path: '/$',
+  getParentRoute: () => RegistryRouteRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/$registry': typeof RegistryRouteRouteWithChildren
   '/spike': typeof SpikeRoute
+  '/$registry/$': typeof RegistrySplatRoute
+  '/$registry/': typeof RegistryIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/spike': typeof SpikeRoute
+  '/$registry/$': typeof RegistrySplatRoute
+  '/$registry': typeof RegistryIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/$registry': typeof RegistryRouteRouteWithChildren
   '/spike': typeof SpikeRoute
+  '/$registry/$': typeof RegistrySplatRoute
+  '/$registry/': typeof RegistryIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/spike'
+  fullPaths: '/' | '/$registry' | '/spike' | '/$registry/$' | '/$registry/'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/spike'
-  id: '__root__' | '/' | '/spike'
+  to: '/' | '/spike' | '/$registry/$' | '/$registry'
+  id:
+    | '__root__'
+    | '/'
+    | '/$registry'
+    | '/spike'
+    | '/$registry/$'
+    | '/$registry/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  RegistryRouteRoute: typeof RegistryRouteRouteWithChildren
   SpikeRoute: typeof SpikeRoute
 }
 
@@ -58,6 +91,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/$registry': {
+      id: '/$registry'
+      path: '/$registry'
+      fullPath: '/$registry'
+      preLoaderRoute: typeof RegistryRouteRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/spike': {
       id: '/spike'
       path: '/spike'
@@ -65,11 +105,40 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof SpikeRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/$registry/': {
+      id: '/$registry/'
+      path: '/'
+      fullPath: '/$registry/'
+      preLoaderRoute: typeof RegistryIndexRouteImport
+      parentRoute: typeof RegistryRouteRoute
+    }
+    '/$registry/$': {
+      id: '/$registry/$'
+      path: '/$'
+      fullPath: '/$registry/$'
+      preLoaderRoute: typeof RegistrySplatRouteImport
+      parentRoute: typeof RegistryRouteRoute
+    }
   }
 }
 
+interface RegistryRouteRouteChildren {
+  RegistrySplatRoute: typeof RegistrySplatRoute
+  RegistryIndexRoute: typeof RegistryIndexRoute
+}
+
+const RegistryRouteRouteChildren: RegistryRouteRouteChildren = {
+  RegistrySplatRoute: RegistrySplatRoute,
+  RegistryIndexRoute: RegistryIndexRoute,
+}
+
+const RegistryRouteRouteWithChildren = RegistryRouteRoute._addFileChildren(
+  RegistryRouteRouteChildren,
+)
+
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  RegistryRouteRoute: RegistryRouteRouteWithChildren,
   SpikeRoute: SpikeRoute,
 }
 export const routeTree = rootRouteImport
