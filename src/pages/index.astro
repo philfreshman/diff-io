@@ -26,6 +26,14 @@ const tiles = [
 		},
 	},
 	{
+		title: "Go",
+		subtitle: "Go modules & standard ecosystem",
+		href: "/go",
+		colors: {
+			glow: "0, 173, 216", // Go cyan
+		},
+	},
+	{
 		title: "PyPI",
 		subtitle: "Python packages",
 		href: "/pypi",
@@ -41,13 +49,13 @@ const tiles = [
 	<BaseHead title={title} description={description} />
 
 	<body
-		class="min-h-screen text-neutral-900 transition-colors duration-300 dark:text-neutral-100"
+		class="min-h-dvh text-neutral-900 transition-colors duration-300 dark:text-neutral-100"
 	>
 		<ThemeToggle client:load />
 		<SpaceBackground showGradient={true} />
 
 		<main
-			class="relative flex min-h-screen flex-col items-center justify-center px-6"
+			class="relative flex min-h-dvh flex-col items-center justify-center px-6"
 		>
 			<header class="mb-16 text-center">
 				<h1
