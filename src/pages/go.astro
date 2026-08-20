@@ -1,0 +1,17 @@
+---
+import FileViewer from "../components/FileViewer/FileViewer.astro";
+import Layout from "../layouts/Layout.astro";
+---
+
+<Layout
+	registry="go"
+	title="Go"
+	description="Compare Go module versions and view source-aware diffs for packages served by the Go module proxy."
+>
+	<div
+		id="content"
+		class="relative flex-1 p-4 overflow-auto min-w-0 bg-white dark:bg-neutral-950"
+	>
+		<FileViewer />
+	</div>
+</Layout>

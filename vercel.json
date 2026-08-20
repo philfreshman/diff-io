@@ -4,6 +4,7 @@
 	"rewrites": [
 		{ "source": "/npm/(.*)", "destination": "/npm" },
 		{ "source": "/crates/(.*)", "destination": "/crates" },
+		{ "source": "/go/(.*)", "destination": "/go" },
 		{ "source": "/pypi/(.*)", "destination": "/pypi" }
 	],
 	"cleanUrls": true,
