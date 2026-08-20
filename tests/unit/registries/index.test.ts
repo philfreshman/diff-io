@@ -3,6 +3,7 @@ import {
 	getAdapter,
 	isRegistryId,
 	registryAdapters,
+	requireAdapter,
 } from "#/lib/registries/index.ts";
 
 describe("getAdapter", () => {
@@ -42,5 +43,15 @@ describe("registryAdapters", () => {
 			expect(adapter.label.length).toBeGreaterThan(0);
 			expect(adapter.glow).toMatch(/^\d+, \d+, \d+$/);
 		}
+	});
+});
+
+describe("requireAdapter", () => {
+	test("hands back the adapter for a validated segment", () => {
+		expect(requireAdapter("go").id).toBe("go");
+	});
+
+	test("refuses to guess a registry, rather than falling back to npm", () => {
+		expect(() => requireAdapter("maven")).toThrow("maven");
 	});
 });

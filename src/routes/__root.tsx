@@ -4,6 +4,7 @@ import {
 	Outlet,
 	Scripts,
 } from "@tanstack/react-router";
+import { NotFound } from "#/components/NotFound.tsx";
 import { StarField } from "#/components/landing/StarField.tsx";
 import { ThemeToggle } from "#/components/theme/ThemeToggle.tsx";
 import { THEME_SCRIPT } from "#/lib/themeScript.ts";
@@ -18,6 +19,7 @@ export const Route = createRootRoute({
 		],
 		links: [{ rel: "stylesheet", href: globalsCss }],
 	}),
+	notFoundComponent: NotFound,
 	shellComponent: RootDocument,
 });
 
