@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useState } from "react";
 import { MoonIcon, SunIcon, SystemIcon } from "#/components/ui/icons.tsx";
-import { IconButton } from "#/components/ui/IconButton.tsx";
+import { IconButton } from "#/components/ui/IconButton/IconButton.tsx";
 import {
 	applyTheme,
 	DEFAULT_SELECTION,
