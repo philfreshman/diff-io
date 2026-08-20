@@ -24,7 +24,7 @@ function RootDocument() {
 			<head>
 				<HeadContent />
 			</head>
-			<body className="text-neutral-900 dark:text-neutral-100">
+			<body>
 				<Outlet />
 				<Scripts />
 			</body>

@@ -1,4 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
+import styles from "./index.module.css";
 
 export const Route = createFileRoute("/")({
 	component: Home,
@@ -6,9 +7,9 @@ export const Route = createFileRoute("/")({
 
 function Home() {
 	return (
-		<main className="flex min-h-dvh flex-col items-center justify-center gap-2">
-			<h1 className="text-4xl font-bold tracking-tight">diffpack</h1>
-			<p className="text-neutral-500 dark:text-neutral-400">
+		<main className={styles.page}>
+			<h1 className={styles.title}>diffpack</h1>
+			<p className={styles.tagline}>
 				Compare package versions across ecosystems.
 			</p>
 		</main>
