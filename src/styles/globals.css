@@ -2,33 +2,137 @@
  * Global stylesheet: design tokens, the reset, and document-level styling.
  * Everything else is colocated in `*.module.css` next to its component.
  *
- * Themes switch on `data-theme` set on <html> by a pre-paint script, so the
- * tokens are redefined per theme rather than duplicated at every use site.
+ * Themes switch on `data-theme`, set on <html> by the pre-paint script in
+ * `__root.tsx`, so the tokens are redefined per theme rather than duplicated at
+ * every use site. A component reads `var(--color-foreground)`; it never branches
+ * on the theme itself.
  */
+
+@font-face {
+	font-family: "Miriam Libre";
+	src:
+		local("Miriam Libre Regular"),
+		url("/fonts/MiriamLibre-Regular.woff") format("woff");
+	font-style: normal;
+	font-weight: 400;
+	font-display: block;
+}
+
+@font-face {
+	font-family: "Miriam Libre";
+	src:
+		local("Miriam Libre Bold"),
+		url("/fonts/MiriamLibre-Bold.woff") format("woff");
+	font-style: normal;
+	font-weight: 700;
+	font-display: block;
+}
 
 :root {
 	color-scheme: light;
 
-	--color-background: #ffffff;
-	--color-foreground: #171717;
-	--color-muted: #737373;
+	/* --- Neutral ramp -------------------------------------------------- */
+	--neutral-50: #fafafa;
+	--neutral-100: #f5f5f5;
+	--neutral-200: #e5e5e5;
+	--neutral-300: #d4d4d4;
+	--neutral-400: #a3a3a3;
+	--neutral-500: #737373;
+	--neutral-600: #525252;
+	--neutral-700: #404040;
+	--neutral-800: #262626;
+	--neutral-900: #171717;
+	--neutral-950: #0a0a0a;
 
+	/* --- Semantic colour ------------------------------------------------
+	   The only colours components should name. Redefined under
+	   :root[data-theme="dark"] below. */
+	--color-background: #ffffff;
+	--color-foreground: var(--neutral-900);
+	--color-muted: var(--neutral-500);
+	--color-border: var(--neutral-200);
+	--color-surface: var(--neutral-50);
+	--color-surface-hover: rgb(0 0 0 / 0.05);
+	--color-focus-ring: var(--neutral-900);
+
+	/* --- Registry accents ----------------------------------------------
+	   Kept as raw channels too, because the tile glow composes them into
+	   rgb(… / alpha) at several opacities. */
+	--registry-npm-rgb: 203 56 55;
+	--registry-crates-rgb: 222 132 44;
+	--registry-go-rgb: 0 173 216;
+	--registry-pypi-rgb: 55 118 171;
+	--registry-npm: rgb(var(--registry-npm-rgb));
+	--registry-crates: rgb(var(--registry-crates-rgb));
+	--registry-go: rgb(var(--registry-go-rgb));
+	--registry-pypi: rgb(var(--registry-pypi-rgb));
+
+	/* --- Type ----------------------------------------------------------- */
+	--font-display: "Miriam Libre", sans-serif;
 	--font-sans:
 		ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
 	--font-mono:
 		ui-monospace, SFMono-Regular, Menlo, Monaco, "Cascadia Mono", monospace;
 
+	--text-xs: 0.75rem;
+	--text-sm: 0.875rem;
+	--text-base: 1rem;
+	--text-lg: 1.125rem;
+	--text-xl: 1.5rem;
+	--text-2xl: 2.25rem;
+	--text-3xl: 3rem;
+
+	/* --- Space ---------------------------------------------------------- */
+	--space-1: 0.25rem;
+	--space-2: 0.5rem;
+	--space-3: 0.75rem;
+	--space-4: 1rem;
+	--space-6: 1.5rem;
+	--space-8: 2rem;
+	--space-12: 3rem;
+	--space-16: 4rem;
+
+	/* --- Radii ---------------------------------------------------------- */
+	--radius-sm: 0.125rem;
 	--radius-md: 0.2rem;
+	--radius-lg: 0.5rem;
+	--radius-full: 9999px;
+
+	/* --- Motion --------------------------------------------------------- */
+	--duration-fast: 150ms;
+	--duration-slow: 400ms;
+
+	/* --- Layers --------------------------------------------------------- */
+	--z-background: -1;
+	--z-toolbar: 10;
+	--z-overlay: 100;
+
+	/* --- Layout --------------------------------------------------------- */
+	--header-height-sm: 5rem;
+	--header-height-md: 8rem;
+	--header-height-lg: calc(var(--header-height-md) + 2.25rem);
+
+	/* --- Breakpoints ----------------------------------------------------
+	   `@media` cannot read custom properties, so these are the single written
+	   record of the three widths; media queries repeat the literals. */
+	--breakpoint-sm: 53rem;
+	--breakpoint-md: 63rem;
+	--breakpoint-lg: 75rem;
 }
 
 :root[data-theme="dark"] {
 	color-scheme: dark;
 
-	--color-background: #0a0a0a;
-	--color-foreground: #f5f5f5;
-	--color-muted: #a3a3a3;
+	--color-background: var(--neutral-950);
+	--color-foreground: var(--neutral-100);
+	--color-muted: var(--neutral-400);
+	--color-border: var(--neutral-800);
+	--color-surface: var(--neutral-900);
+	--color-surface-hover: rgb(255 255 255 / 0.1);
+	--color-focus-ring: var(--neutral-100);
 }
 
+/* Minimal reset — there is no Tailwind preflight to inherit from. */
 *,
 *::before,
 *::after {
@@ -45,4 +149,15 @@ body {
 	color: var(--color-foreground);
 	font-family: var(--font-sans);
 	-webkit-font-smoothing: antialiased;
+}
+
+/*
+ * Reduced motion is honoured per component rather than by a blanket override,
+ * because the largest animation on the page is a canvas loop that no CSS rule
+ * can reach (see StarField).
+ */
+@media (prefers-reduced-motion: reduce) {
+	html {
+		scroll-behavior: auto;
+	}
 }
