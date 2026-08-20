@@ -23,9 +23,25 @@ const { title, description } = Astro.props;
 				"data-theme-selection",
 				storedTheme,
 			);
+			setThemeColor(theme);
 		} catch {
 			document.documentElement.setAttribute("data-theme", "dark");
 			document.documentElement.setAttribute("data-theme-selection", "dark");
+			setThemeColor("dark");
+		}
+
+		// Tints the mobile browser chrome (iOS Safari status/toolbar) so it
+		// blends with the page instead of falling back to its default grey.
+		function setThemeColor(theme) {
+			const head = document.head;
+			if (!head) return;
+			let meta = head.querySelector('meta[name="theme-color"]');
+			if (!meta) {
+				meta = document.createElement("meta");
+				meta.setAttribute("name", "theme-color");
+				head.appendChild(meta);
+			}
+			meta.setAttribute("content", theme === "light" ? "#ffffff" : "#0a0a0a");
 		}
 	})();
 </script>

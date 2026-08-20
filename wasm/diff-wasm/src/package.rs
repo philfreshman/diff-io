@@ -29,6 +29,12 @@ pub async fn fetch_and_extract_package(
     pkg: &str,
     version: &str,
 ) -> Result<HashMap<String, FileMapEntry>, JsValue> {
+    if registry == "go" {
+        let bytes = fetch_bytes(&build_go_zip_url(pkg, version)).await?;
+        let files = extract_archive_bytes_with(&bytes, false)?;
+        return Ok(strip_go_module_root(files, pkg, version));
+    }
+
     let bytes = match registry {
         "pypi" => fetch_pypi_sdist_bytes(pkg, version).await?,
         _ => {
@@ -37,6 +43,58 @@ pub async fn fetch_and_extract_package(
         }
     };
     extract_archive_bytes(&bytes)
+}
+
+/// The module proxy serves lower-cased paths, escaping each uppercase letter as
+/// `!` followed by its lowercase form, so `Masterminds` becomes `!masterminds`.
+/// Requesting the unescaped path is a 404.
+fn escape_go_module_path(pkg: &str) -> String {
+    let mut escaped = String::with_capacity(pkg.len());
+    for ch in pkg.chars() {
+        if ch.is_ascii_uppercase() {
+            escaped.push('!');
+            escaped.push(ch.to_ascii_lowercase());
+        } else {
+            escaped.push(ch);
+        }
+    }
+    escaped
+}
+
+fn build_go_zip_url(pkg: &str, version: &str) -> String {
+    format!(
+        "https://proxy.golang.org/{}/@v/{version}.zip",
+        escape_go_module_path(pkg)
+    )
+}
+
+/// Module zips prefix every entry with `<module>@<version>/`. That prefix embeds
+/// the version, so the two sides of a diff would share no paths at all and every
+/// file would read as removed-then-added. Unlike the other registries the prefix
+/// spans several components (`github.com/sirupsen/logrus@v1.9.3/`), which is why
+/// `strip_common_root` cannot do the job. Entry names keep the module's real
+/// casing, so the unescaped path is the one to strip.
+fn strip_go_module_root(
+    files: HashMap<String, FileMapEntry>,
+    pkg: &str,
+    version: &str,
+) -> HashMap<String, FileMapEntry> {
+    let prefix = format!("{pkg}@{version}/");
+    if !files.keys().any(|path| path.starts_with(&prefix)) {
+        return strip_common_root(files);
+    }
+
+    let mut stripped = HashMap::new();
+    for (path, entry) in files {
+        if let Some(rest) = path.strip_prefix(&prefix) {
+            if !rest.is_empty() {
+                stripped.insert(rest.to_string(), entry);
+            }
+        }
+    }
+
+    ensure_directories(&mut stripped);
+    stripped
 }
 
 fn build_tarball_url(registry: &str, pkg: &str, version: &str) -> Result<String, JsValue> {
@@ -138,23 +196,33 @@ fn is_supported_archive_url(url: &str) -> bool {
 }
 
 fn extract_archive_bytes(bytes: &[u8]) -> Result<HashMap<String, FileMapEntry>, JsValue> {
+    extract_archive_bytes_with(bytes, true)
+}
+
+fn extract_archive_bytes_with(
+    bytes: &[u8],
+    strip_root: bool,
+) -> Result<HashMap<String, FileMapEntry>, JsValue> {
     if is_gzip(bytes) {
         let mut decoder = GzDecoder::new(bytes);
         let mut decompressed = Vec::new();
         decoder
             .read_to_end(&mut decompressed)
             .map_err(|err| JsValue::from_str(&format!("Gzip decompression failed: {err}")))?;
-        return extract_archive_bytes(&decompressed);
+        return extract_archive_bytes_with(&decompressed, strip_root);
     }
 
     if is_zip(bytes) {
-        return parse_zip_bytes(bytes);
+        return parse_zip_bytes(bytes, strip_root);
     }
 
-    parse_tar_bytes(bytes)
+    parse_tar_bytes(bytes, strip_root)
 }
 
-fn parse_tar_bytes(bytes: &[u8]) -> Result<HashMap<String, FileMapEntry>, JsValue> {
+fn parse_tar_bytes(
+    bytes: &[u8],
+    strip_root: bool,
+) -> Result<HashMap<String, FileMapEntry>, JsValue> {
     let mut archive = Archive::new(Cursor::new(bytes));
     let mut files = HashMap::new();
     let entries = archive
@@ -196,10 +264,17 @@ fn parse_tar_bytes(bytes: &[u8]) -> Result<HashMap<String, FileMapEntry>, JsValu
     }
 
     ensure_directories(&mut files);
-    Ok(strip_common_root(files))
+    Ok(if strip_root {
+        strip_common_root(files)
+    } else {
+        files
+    })
 }
 
-fn parse_zip_bytes(bytes: &[u8]) -> Result<HashMap<String, FileMapEntry>, JsValue> {
+fn parse_zip_bytes(
+    bytes: &[u8],
+    strip_root: bool,
+) -> Result<HashMap<String, FileMapEntry>, JsValue> {
     let reader = Cursor::new(bytes);
     let mut archive =
         ZipArchive::new(reader).map_err(|err| JsValue::from_str(&format!("Zip parsing failed: {err}")))?;
@@ -237,7 +312,11 @@ fn parse_zip_bytes(bytes: &[u8]) -> Result<HashMap<String, FileMapEntry>, JsValu
     }
 
     ensure_directories(&mut files);
-    Ok(strip_common_root(files))
+    Ok(if strip_root {
+        strip_common_root(files)
+    } else {
+        files
+    })
 }
 
 fn normalize_path(path: &str, is_directory: bool) -> String {
