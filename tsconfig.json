@@ -1,20 +1,29 @@
 {
-	"extends": "astro/tsconfigs/strict",
-	"include": [
-		".astro/types.d.ts",
-		"**/*"
-	],
-	"exclude": [
-		"dist",
-		"wasm"
-	],
+	"include": ["**/*.ts", "**/*.tsx"],
+	"exclude": ["dist", "wasm", "node_modules"],
 	"compilerOptions": {
-		"types": ["node", "astro/client", "vite/client"],
+		"target": "ES2022",
 		"jsx": "react-jsx",
-		"jsxImportSource": "react",
+		"module": "ESNext",
+		"lib": ["ES2022", "DOM", "DOM.Iterable"],
+		"types": ["vite/client", "bun"],
 		"paths": {
+			"#/*": ["./src/*"],
 			"diff-wasm": ["./wasm/diff-wasm/pkg"],
 			"diff-wasm/*": ["./wasm/diff-wasm/pkg/*"]
-		}
+		},
+
+		"moduleResolution": "bundler",
+		"allowImportingTsExtensions": true,
+		"verbatimModuleSyntax": true,
+		"noEmit": true,
+
+		"skipLibCheck": true,
+		"strict": true,
+		"noUncheckedIndexedAccess": true,
+		"noUnusedLocals": true,
+		"noUnusedParameters": true,
+		"noFallthroughCasesInSwitch": true,
+		"noUncheckedSideEffectImports": true
 	}
 }

@@ -6,7 +6,15 @@
 		"useIgnoreFile": true
 	},
 	"files": {
-		"includes": ["src/**/*"]
+		"includes": [
+			"src/**/*",
+			"tests/**/*",
+			"*.ts",
+			"package.json",
+			"tsconfig.json",
+			"tsr.config.json",
+			"biome.json"
+		]
 	},
 	"formatter": {
 		"enabled": true,
@@ -30,13 +38,6 @@
 			"quoteStyle": "double"
 		}
 	},
-	"html": {
-		"experimentalFullSupportEnabled": true,
-		"formatter": {
-			"enabled": true,
-			"indentScriptAndStyle": true
-		}
-	},
 	"json": {
 		"formatter": {
 			"enabled": true
@@ -52,28 +53,12 @@
 	},
 	"overrides": [
 		{
-			"includes": ["src/components/Header/VersionSelectors.astro"],
+			"includes": ["src/routeTree.gen.ts"],
 			"linter": {
-				"rules": {
-					"a11y": {
-						"useValidAnchor": "off"
-					}
-				}
-			}
-		},
-		{
-			"includes": ["**/*.astro"],
-			"linter": {
-				"rules": {
-					"style": {
-						"useConst": "off",
-						"useImportType": "off"
-					},
-					"correctness": {
-						"noUnusedVariables": "off",
-						"noUnusedImports": "off"
-					}
-				}
+				"enabled": false
+			},
+			"formatter": {
+				"enabled": false
 			}
 		}
 	]

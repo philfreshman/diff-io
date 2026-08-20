@@ -2,8 +2,18 @@
 node_modules/
 
 # Build outputs
-.astro/
 dist/
+.output/
+.nitro/
+.tanstack/
+.vite/
+
+# Generated wasm package
+wasm/diff-wasm/pkg/
+
+# Test artefacts
+test-results/
+playwright-report/
 
 # Environment variables
 .env.local
@@ -12,37 +22,18 @@ dist/
 # Logs
 *.log
 npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-pnpm-debug.log*
 
 # OS files
 .DS_Store
-.DS_Store?
 ._*
-.Spotlight-V100
-.Trashes
-ehthumbs.db
-Thumbs.db
 
 # IDE
 .vscode/
 .idea/
 *.swp
-*.swo
-*~
-
-# Cache
-.cache/
-.parcel-cache/
-.turbo/
 
 # Misc
 *.tsbuildinfo
-
-
-# Photoshop
-*.psd
 
 # Vercel
 .vercel
