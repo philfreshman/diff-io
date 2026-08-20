@@ -12,7 +12,7 @@
 		"build": "bun run build:wasm && vite build",
 		"preview": "vite preview --port 4321",
 		"generate-routes": "tsr generate",
-		"test": "bun test",
+		"test": "bun test tests/unit",
 		"test:e2e": "playwright test",
 		"lint": "biome lint .",
 		"format": "biome format .",

@@ -1,0 +1,25 @@
+.starField {
+	position: fixed;
+	inset: 0;
+	/* dvh tracks the visible viewport as mobile browser toolbars collapse, and
+	   keeps stars near the bottom edge from adding scrollable overflow. */
+	height: 100dvh;
+	width: 100%;
+	z-index: var(--z-background);
+	pointer-events: none;
+	opacity: 0;
+	animation: fadeIn var(--duration-slow) ease-in forwards;
+}
+
+@keyframes fadeIn {
+	to {
+		opacity: 1;
+	}
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.starField {
+		opacity: 1;
+		animation: none;
+	}
+}

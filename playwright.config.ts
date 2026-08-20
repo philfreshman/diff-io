@@ -7,7 +7,9 @@ export default defineConfig({
 	// The WASM engine downloads real archives from the registries, so these are
 	// slow and network-dependent by nature.
 	timeout: 120_000,
-	expect: { timeout: 60_000 },
+	// Slow work happens inside `page.evaluate`, which the test timeout covers;
+	// assertions themselves are about the UI and should fail fast.
+	expect: { timeout: 10_000 },
 	fullyParallel: false,
 	workers: 1,
 	reporter: process.env.CI ? "github" : "list",
