@@ -34,6 +34,12 @@ export interface ComboboxProps<T> {
 	disabled?: boolean;
 	/** Rendered inside the input's box: the search/spinner/reset slot. */
 	trailing?: ReactNode;
+	/**
+	 * The list opened or closed. A version selector types into the input to
+	 * filter, so it needs the close in order to put the selected version back;
+	 * package search keeps whatever was typed and ignores this.
+	 */
+	onOpenChange?(open: boolean): void;
 }
 
 function substringFilter(text: string, query: string): boolean {
@@ -61,6 +67,7 @@ export function Combobox<T>({
 	placeholder,
 	disabled = false,
 	trailing,
+	onOpenChange,
 }: ComboboxProps<T>) {
 	// Enter is ambiguous: with a row highlighted it selects that row, with none
 	// it accepts the raw text. Base UI owns the first case, so this only has to
@@ -80,7 +87,10 @@ export function Combobox<T>({
 	return (
 		<Base.Root
 			open={open}
-			onOpenChange={setOpen}
+			onOpenChange={(next) => {
+				setOpen(next);
+				onOpenChange?.(next);
+			}}
 			items={items as T[]}
 			inputValue={inputValue}
 			onInputValueChange={(value, details) => {

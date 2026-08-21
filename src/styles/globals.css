@@ -57,6 +57,10 @@
 	   field and need to dim it without hiding it. */
 	--color-surface-veil: rgb(255 255 255 / 0.65);
 	--color-focus-ring: var(--neutral-900);
+	/* The one action a screen asks for — today only the Compare button. */
+	--color-accent: #2563eb;
+	--color-accent-hover: #1d4ed8;
+	--color-accent-foreground: #ffffff;
 
 	/* The night sky behind the landing page. Light theme has none — a component
 	   reads this token rather than branching on the theme itself. */
@@ -142,6 +146,9 @@
 	--color-surface-hover: rgb(255 255 255 / 0.1);
 	--color-surface-veil: rgb(10 10 10 / 0.4);
 	--color-focus-ring: var(--neutral-100);
+	--color-accent: #2563eb;
+	--color-accent-hover: #3b82f6;
+	--color-accent-foreground: #ffffff;
 
 	--cosmic-backdrop:
 		radial-gradient(

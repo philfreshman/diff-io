@@ -1,0 +1,6 @@
+/* The row's fixed point: the two fields and the package name share what is
+   left, and the button keeps the width its label needs. */
+.compare {
+	flex: 0 0 auto;
+	min-width: 8rem;
+}
