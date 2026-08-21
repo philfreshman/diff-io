@@ -10,6 +10,7 @@ import { NotFound } from "#/components/NotFound/NotFound.tsx";
 import { ThemeToggle } from "#/components/theme/ThemeToggle/ThemeToggle.tsx";
 import { createQueryClient } from "#/lib/query/queryClient.ts";
 import { THEME_SCRIPT } from "#/lib/themeScript.ts";
+import { TREE_WIDTH_SCRIPT } from "#/lib/tree/widthScript.ts";
 import globalsCss from "#/styles/globals.css?url";
 
 export const Route = createRootRoute({
@@ -39,6 +40,8 @@ function RootDocument() {
 				<HeadContent />
 				{/* biome-ignore lint/security/noDangerouslySetInnerHtml: pre-paint theme script must be inline */}
 				<script dangerouslySetInnerHTML={{ __html: THEME_SCRIPT }} />
+				{/* biome-ignore lint/security/noDangerouslySetInnerHtml: pre-paint tree width script must be inline */}
+				<script dangerouslySetInnerHTML={{ __html: TREE_WIDTH_SCRIPT }} />
 			</head>
 			<body>
 				<QueryClientProvider client={queryClient}>

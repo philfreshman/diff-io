@@ -14,7 +14,9 @@ const NODE = "/npm/node/26.6.0/26.7.0";
 const ENGINE = { timeout: 90_000 };
 
 const status = (page: Page) => page.getByTestId("diff-status");
-const files = (page: Page) => page.getByTestId("diff-files").getByRole("link");
+/** Files are reached through the tree; folders are `treeitem`s too. */
+const files = (page: Page) =>
+	page.getByRole("treeitem").and(page.locator("[data-type='file']"));
 
 async function ready(page: Page) {
 	await expect(status(page)).toHaveAttribute("data-state", "ready", ENGINE);
@@ -53,7 +55,10 @@ test("the file on screen is the file last asked for", async ({ page }) => {
 
 	// Clicked back to back: the reply to the first must not overwrite the
 	// second, whichever order the worker answers in.
-	const [first, second] = await files(page).allInnerTexts();
+	// By path, not by row text: a row also carries its `+n`/`-n` counts.
+	const [first, second] = await files(page).evaluateAll((rows) =>
+		rows.map((row) => row.getAttribute("data-path") ?? ""),
+	);
 	expect(second).toBeDefined();
 	await files(page).nth(0).click();
 	await files(page).nth(1).click();
@@ -88,18 +93,16 @@ test("nothing to compare, nothing started", async ({ page }) => {
 	await page.goto("/npm/express");
 
 	await expect(status(page)).toHaveAttribute("data-state", "idle");
-	await expect(page.getByTestId("diff-files")).toHaveCount(0);
+	await expect(page.getByRole("tree")).toHaveCount(0);
 });
 
 test("extracts a Go module and strips its versioned root", async ({ page }) => {
 	await page.goto("/go/github.com/go-chi/chi/v5/v5.3.1/v5.3.2");
 	await ready(page);
 
-	const paths = await files(page).allInnerTexts();
-
 	// Module zips prefix every entry with `<module>@<version>/`. That prefix
 	// embeds the version, so leaving it on would make every file read as
-	// removed-then-added.
-	expect(paths).toContain("tree.go");
-	expect(paths.some((path) => path.includes("@v5."))).toBe(false);
+	// removed-then-added, under a folder named after the version.
+	await expect(files(page).filter({ hasText: "tree.go" })).toHaveCount(1);
+	await expect(page.locator("[data-path*='@v5.']")).toHaveCount(0);
 });

@@ -64,6 +64,13 @@
 	/* Something the user asked for did not happen — a comparison the engine
 	   could not build, a file it could not read. */
 	--color-danger: #b91c1c;
+	/* What happened to a file, in the tree and (from task 12) in the diff. */
+	--color-added: #16a34a;
+	--color-removed: #dc2626;
+	--color-renamed: #d97706;
+	--color-renamed-surface: #fef3c7;
+	/* The row the URL names, in the tree. */
+	--color-selected-surface: #eff6ff;
 
 	/* The night sky behind the landing page. Light theme has none — a component
 	   reads this token rather than branching on the theme itself. */
@@ -153,6 +160,11 @@
 	--color-accent-hover: #3b82f6;
 	--color-accent-foreground: #ffffff;
 	--color-danger: #f87171;
+	--color-added: #4ade80;
+	--color-removed: #f87171;
+	--color-renamed: #fbbf24;
+	--color-renamed-surface: rgb(120 53 15 / 0.3);
+	--color-selected-surface: rgb(30 58 138 / 0.2);
 
 	--cosmic-backdrop:
 		radial-gradient(
