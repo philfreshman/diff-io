@@ -1,0 +1,33 @@
+.header {
+	display: flex;
+	align-items: center;
+	gap: var(--space-8);
+	padding: var(--space-4) var(--space-6);
+	border-bottom: 1px solid var(--color-border);
+	background-color: var(--color-surface);
+}
+
+.logo {
+	padding: var(--space-2) var(--space-3);
+	border: 2px solid var(--color-foreground);
+	border-radius: var(--radius-md);
+	color: var(--color-foreground);
+	font-family: var(--font-display);
+	font-size: var(--text-lg);
+	font-weight: 700;
+	text-decoration: none;
+}
+
+.controls {
+	display: flex;
+	min-width: 0;
+	flex: 1;
+	align-items: flex-end;
+	gap: var(--space-4);
+}
+
+/* The package field is the widest control in the row; the version selectors
+   task 8 adds sit beside it at their own natural width. */
+.controls > * {
+	width: min(22rem, 100%);
+}

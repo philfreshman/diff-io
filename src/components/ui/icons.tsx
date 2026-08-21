@@ -65,3 +65,19 @@ export function GithubIcon(props: IconProps) {
 		</Icon>
 	);
 }
+
+export function SearchIcon(props: IconProps) {
+	return (
+		<Icon {...props}>
+			<path d="M11 11m-7 0a7 7 0 1 0 14 0a7 7 0 1 0 -14 0M21 21l-5.2-5.2" />
+		</Icon>
+	);
+}
+
+export function CloseIcon(props: IconProps) {
+	return (
+		<Icon {...props}>
+			<path d="M18 6 6 18M6 6l12 12" />
+		</Icon>
+	);
+}

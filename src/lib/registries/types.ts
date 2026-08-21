@@ -23,6 +23,8 @@ export type Fetcher = (
 export interface RegistryCapabilities {
 	/** Go: false — no CORS-reachable search API exists. */
 	discoverySearch: boolean;
+	/** What the empty search field invites, in this ecosystem's own words. */
+	searchPlaceholder: string;
 	/** What the user must type when discovery search is unavailable. */
 	searchHint?: string;
 }
