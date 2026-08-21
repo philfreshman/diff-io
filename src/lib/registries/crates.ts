@@ -9,7 +9,10 @@ export function createCratesAdapter(fetcher: Fetcher = fetch): RegistryAdapter {
 		id: "crates",
 		label: "crates.io",
 		tagline: "Rust ecosystem packages",
-		capabilities: { discoverySearch: true },
+		capabilities: {
+			discoverySearch: true,
+			searchPlaceholder: "Search crates.io…",
+		},
 		packagePath: singleSegmentPath,
 
 		async search(query, signal) {

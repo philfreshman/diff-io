@@ -8,12 +8,16 @@ describe("capabilities", () => {
 	test("go cannot be searched by keyword and says what to type instead", () => {
 		expect(goAdapter.capabilities.discoverySearch).toBe(false);
 		expect(goAdapter.capabilities.searchHint).toContain("module path");
+		expect(goAdapter.capabilities.searchPlaceholder).toBe(
+			"github.com/user/module",
+		);
 	});
 
 	test("every other registry has keyword search and needs no hint", () => {
 		for (const adapter of [npmAdapter, cratesAdapter, pypiAdapter]) {
 			expect(adapter.capabilities.discoverySearch).toBe(true);
 			expect(adapter.capabilities.searchHint).toBeUndefined();
+			expect(adapter.capabilities.searchPlaceholder).toContain("Search");
 		}
 	});
 });

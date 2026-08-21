@@ -104,6 +104,7 @@ export function createGoAdapter(fetcher: Fetcher = fetch): RegistryAdapter {
 		tagline: "Go modules & standard ecosystem",
 		capabilities: {
 			discoverySearch: false,
+			searchPlaceholder: "github.com/user/module",
 			searchHint: "Type a full module path, e.g. github.com/go-chi/chi/v5",
 		},
 		packagePath: {
