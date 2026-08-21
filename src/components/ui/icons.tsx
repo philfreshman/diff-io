@@ -89,3 +89,52 @@ export function DownloadIcon(props: IconProps) {
 		</Icon>
 	);
 }
+
+export function FilterIcon(props: IconProps) {
+	return (
+		<Icon {...props}>
+			<path d="M3 5h18M6 12h12M10 19h4" />
+		</Icon>
+	);
+}
+
+export function ChevronRightIcon(props: IconProps) {
+	return (
+		<Icon {...props}>
+			<path d="m9 18 6-6-6-6" />
+		</Icon>
+	);
+}
+
+export function ChevronDownIcon(props: IconProps) {
+	return (
+		<Icon {...props}>
+			<path d="m6 9 6 6 6-6" />
+		</Icon>
+	);
+}
+
+export function FolderIcon(props: IconProps) {
+	return (
+		<Icon {...props}>
+			<path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.93a2 2 0 0 1-1.66-.9l-.82-1.2A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13c0 1.1.9 2 2 2Z" />
+		</Icon>
+	);
+}
+
+export function FolderOpenIcon(props: IconProps) {
+	return (
+		<Icon {...props}>
+			<path d="m6 14 1.45-2.9A2 2 0 0 1 9.24 10H20a2 2 0 0 1 1.94 2.5l-1.55 6a2 2 0 0 1-1.94 1.5H4a2 2 0 0 1-2-2V5c0-1.1.9-2 2-2h3.93a2 2 0 0 1 1.66.9l.82 1.2a2 2 0 0 0 1.66.9H18a2 2 0 0 1 2 2v2" />
+		</Icon>
+	);
+}
+
+export function FileIcon(props: IconProps) {
+	return (
+		<Icon {...props}>
+			<path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z" />
+			<path d="M14 2v6h6" />
+		</Icon>
+	);
+}

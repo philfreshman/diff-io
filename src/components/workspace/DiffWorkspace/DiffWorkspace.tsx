@@ -1,4 +1,5 @@
-import { Link } from "@tanstack/react-router";
+import { useNavigate } from "@tanstack/react-router";
+import { TreePanel } from "#/components/tree/TreePanel/TreePanel.tsx";
 import { Spinner } from "#/components/ui/Spinner/Spinner.tsx";
 import { requireAdapter } from "#/lib/registries/index.ts";
 import { flattenFiles } from "#/lib/session/tree.ts";
@@ -18,8 +19,14 @@ import styles from "./DiffWorkspace.module.css";
  */
 export function DiffWorkspace({ slug }: { slug: DiffSlug }) {
 	const adapter = requireAdapter(slug.registry);
+	const navigate = useNavigate();
 	const session = useDiffSession(slug);
 	const files = flattenFiles(session.tree);
+	// Opening a file is a URL write like any other navigation; the session
+	// follows the address, never the click.
+	function openFile(file: string) {
+		navigate({ to: buildPath(adapter, { ...slug, file }) });
+	}
 
 	return (
 		// The parsed URL, stated on the shell: it is what the route hands down,
@@ -56,19 +63,11 @@ export function DiffWorkspace({ slug }: { slug: DiffSlug }) {
 
 				{session.status === "ready" && (
 					<div className={styles.panels}>
-						<ul className={styles.files} data-testid="diff-files">
-							{files.map((entry) => (
-								<li key={entry.path}>
-									<Link
-										to={buildPath(adapter, { ...slug, file: entry.path })}
-										data-status={entry.status}
-										data-active={entry.path === slug.file || undefined}
-									>
-										{entry.path}
-									</Link>
-								</li>
-							))}
-						</ul>
+						<TreePanel
+							tree={session.tree}
+							selectedPath={slug.file}
+							onOpenFile={openFile}
+						/>
 						{session.file && (
 							<section className={styles.file} data-testid="diff-file">
 								<h2>{session.file.path}</h2>
