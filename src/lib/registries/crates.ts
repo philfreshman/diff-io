@@ -8,7 +8,7 @@ export function createCratesAdapter(fetcher: Fetcher = fetch): RegistryAdapter {
 	return {
 		id: "crates",
 		label: "crates.io",
-		glow: "251, 146, 60",
+		tagline: "Rust ecosystem packages",
 		capabilities: { discoverySearch: true },
 		packagePath: singleSegmentPath,
 

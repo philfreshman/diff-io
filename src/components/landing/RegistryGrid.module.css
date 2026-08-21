@@ -1,0 +1,17 @@
+.grid {
+	display: grid;
+	width: 100%;
+	max-width: 64rem;
+	grid-template-columns: 1fr;
+	gap: var(--space-8);
+	margin: 0;
+	padding: 0;
+	list-style: none;
+}
+
+/* --breakpoint-sm */
+@media (min-width: 53rem) {
+	.grid {
+		grid-template-columns: 1fr 1fr;
+	}
+}

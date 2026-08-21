@@ -58,6 +58,9 @@ test("holds the sky still when the visitor asks for reduced motion", async ({
 }) => {
 	await page.emulateMedia({ reducedMotion: "reduce" });
 	await page.goto("/");
+	// The sky is client-only now that it depends on the theme, so the canvas
+	// arrives after hydration rather than in the server's HTML.
+	await expect(page.getByTestId("star-field")).toBeAttached();
 	await expect.poll(() => paintedPixels(page)).toBeGreaterThan(0);
 
 	// Stars pulse and shooting stars travel, so an animating field repaints
@@ -65,4 +68,47 @@ test("holds the sky still when the visitor asks for reduced motion", async ({
 	const first = await canvasSignature(page);
 	await page.waitForTimeout(600);
 	expect(await canvasSignature(page)).toBe(first);
+});
+
+test("the sky reaches the screen, rather than being painted over", async ({
+	browser,
+}) => {
+	// Reduced motion holds the sky still, so two screenshots of the same page
+	// differ only because of what is or is not painted.
+	const page = await browser.newPage({ reducedMotion: "reduce" });
+	await page.goto("/");
+	await expect(page.getByTestId("star-field")).toBeAttached();
+	await expect.poll(() => paintedPixels(page)).toBeGreaterThan(0);
+
+	const sky = await page.screenshot();
+	await page.addStyleTag({
+		content: '[data-testid="star-field"] { display: none }',
+	});
+	const noSky = await page.screenshot();
+
+	expect(sky.equals(noSky)).toBe(false);
+	await page.close();
+});
+
+test("keeps the sky to the landing page", async ({ page }) => {
+	await page.goto("/");
+	await expect(page.getByTestId("star-field")).toBeAttached();
+
+	await page.goto("/npm/express/4.18.2/5.1.0");
+
+	await expect(page.getByTestId("star-field")).toHaveCount(0);
+});
+
+test("draws no sky in the light theme, and brings it back with the toggle", async ({
+	page,
+}) => {
+	await page.addInitScript(() => localStorage.setItem("theme", "light"));
+	await page.goto("/");
+
+	await expect(page.getByTestId("star-field")).toHaveCount(0);
+
+	// light → dark is the toggle's first step, and it must not need a reload.
+	await page.getByRole("button", { name: "Switch to dark theme" }).click();
+
+	await expect(page.getByTestId("star-field")).toBeAttached();
 });

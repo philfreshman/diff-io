@@ -1,4 +1,5 @@
 import { useEffect, useRef } from "react";
+import { useResolvedTheme } from "#/components/theme/useResolvedTheme.ts";
 import { createRng, generateStars, STAR_COUNT } from "#/lib/starfield.ts";
 import styles from "./StarField.module.css";
 
@@ -20,8 +21,11 @@ interface ShootingStar {
 
 export function StarField() {
 	const canvasRef = useRef<HTMLCanvasElement>(null);
+	const theme = useResolvedTheme();
 
 	useEffect(() => {
+		// The canvas only exists under the dark theme, and only after mount.
+		if (theme !== "dark") return;
 		const canvas = canvasRef.current;
 		if (!canvas) return;
 		const context = canvas.getContext("2d");
@@ -129,7 +133,10 @@ export function StarField() {
 			window.clearInterval(interval);
 			window.removeEventListener("resize", resize);
 		};
-	}, []);
+	}, [theme]);
+
+	// A night sky under a light theme is just noise on a white page.
+	if (theme !== "dark") return null;
 
 	return (
 		// biome-ignore lint/a11y/noAriaHiddenOnFocusable: a canvas carries no tabindex, so it is not focusable
