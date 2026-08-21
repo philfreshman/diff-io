@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { RegistryGrid } from "#/components/landing/RegistryGrid.tsx";
-import { StarField } from "#/components/landing/StarField.tsx";
+import { RegistryGrid } from "#/components/landing/RegistryGrid/RegistryGrid.tsx";
+import { StarField } from "#/components/landing/StarField/StarField.tsx";
 import { GithubIcon } from "#/components/ui/icons.tsx";
 import styles from "./index.module.css";
 

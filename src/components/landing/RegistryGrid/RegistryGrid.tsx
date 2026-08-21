@@ -1,5 +1,5 @@
 import { registryAdapters } from "#/lib/registries/index.ts";
-import { RegistryTile } from "./RegistryTile.tsx";
+import { RegistryTile } from "../RegistryTile/RegistryTile.tsx";
 import styles from "./RegistryGrid.module.css";
 
 /**

@@ -6,8 +6,8 @@ import {
 	Scripts,
 } from "@tanstack/react-router";
 import { useState } from "react";
-import { NotFound } from "#/components/NotFound.tsx";
-import { ThemeToggle } from "#/components/theme/ThemeToggle.tsx";
+import { NotFound } from "#/components/NotFound/NotFound.tsx";
+import { ThemeToggle } from "#/components/theme/ThemeToggle/ThemeToggle.tsx";
 import { createQueryClient } from "#/lib/query/queryClient.ts";
 import { THEME_SCRIPT } from "#/lib/themeScript.ts";
 import globalsCss from "#/styles/globals.css?url";

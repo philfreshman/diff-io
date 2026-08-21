@@ -3,8 +3,8 @@ import { Spinner } from "#/components/ui/Spinner/Spinner.tsx";
 import { requireAdapter } from "#/lib/registries/index.ts";
 import { flattenFiles } from "#/lib/session/tree.ts";
 import { buildPath, type DiffSlug } from "#/lib/url/slug.ts";
-import { useDiffSession } from "./useDiffSession.ts";
-import { WorkspaceHeader } from "./WorkspaceHeader.tsx";
+import { useDiffSession } from "../useDiffSession.ts";
+import { WorkspaceHeader } from "../WorkspaceHeader/WorkspaceHeader.tsx";
 import styles from "./DiffWorkspace.module.css";
 
 /**

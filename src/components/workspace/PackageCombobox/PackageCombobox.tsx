@@ -11,7 +11,7 @@ import {
 	writeHistory,
 } from "#/lib/storage/searchHistory.ts";
 import { buildPath } from "#/lib/url/slug.ts";
-import { usePackageSearch } from "./usePackageSearch.ts";
+import { usePackageSearch } from "../usePackageSearch.ts";
 import styles from "./PackageCombobox.module.css";
 
 export interface PackageComboboxProps {

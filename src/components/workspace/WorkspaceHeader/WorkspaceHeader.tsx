@@ -1,8 +1,8 @@
 import { Link } from "@tanstack/react-router";
 import { requireAdapter } from "#/lib/registries/index.ts";
 import type { DiffSlug } from "#/lib/url/slug.ts";
-import { PackageCombobox } from "./PackageCombobox.tsx";
-import { VersionControls } from "./VersionControls.tsx";
+import { PackageCombobox } from "../PackageCombobox/PackageCombobox.tsx";
+import { VersionControls } from "../VersionControls/VersionControls.tsx";
 import styles from "./WorkspaceHeader.module.css";
 
 /**

@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { DiffWorkspace } from "#/components/workspace/DiffWorkspace.tsx";
+import { DiffWorkspace } from "#/components/workspace/DiffWorkspace/DiffWorkspace.tsx";
 import { requireAdapter } from "#/lib/registries/index.ts";
 import { metaTags } from "#/lib/url/documentMeta.ts";
 import { parseSlug } from "#/lib/url/slug.ts";
