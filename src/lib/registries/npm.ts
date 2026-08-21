@@ -7,7 +7,7 @@ export function createNpmAdapter(fetcher: Fetcher = fetch): RegistryAdapter {
 	return {
 		id: "npm",
 		label: "npm",
-		glow: "239, 68, 68",
+		tagline: "JavaScript & TypeScript packages",
 		capabilities: { discoverySearch: true },
 		packagePath: {
 			parse(segments) {

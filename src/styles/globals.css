@@ -53,11 +53,20 @@
 	--color-border: var(--neutral-200);
 	--color-surface: var(--neutral-50);
 	--color-surface-hover: rgb(0 0 0 / 0.05);
+	/* A translucent pane over the background — the landing tiles sit on the star
+	   field and need to dim it without hiding it. */
+	--color-surface-veil: rgb(255 255 255 / 0.65);
 	--color-focus-ring: var(--neutral-900);
+
+	/* The night sky behind the landing page. Light theme has none — a component
+	   reads this token rather than branching on the theme itself. */
+	--cosmic-backdrop: none;
 
 	/* --- Registry accents ----------------------------------------------
 	   Kept as raw channels too, because the tile glow composes them into
-	   rgb(… / alpha) at several opacities. */
+	   rgb(… / alpha) at several opacities. A registry with no accent of its
+	   own falls back to the neutral one. */
+	--registry-default-rgb: 115 115 115;
 	--registry-npm-rgb: 203 56 55;
 	--registry-crates-rgb: 222 132 44;
 	--registry-go-rgb: 0 173 216;
@@ -96,6 +105,7 @@
 	--radius-sm: 0.125rem;
 	--radius-md: 0.2rem;
 	--radius-lg: 0.5rem;
+	--radius-xl: 1rem;
 	--radius-full: 9999px;
 
 	/* --- Motion --------------------------------------------------------- */
@@ -103,6 +113,7 @@
 	--duration-slow: 400ms;
 
 	/* --- Layers --------------------------------------------------------- */
+	--z-backdrop: -2;
 	--z-background: -1;
 	--z-toolbar: 10;
 	--z-overlay: 100;
@@ -129,7 +140,21 @@
 	--color-border: var(--neutral-800);
 	--color-surface: var(--neutral-900);
 	--color-surface-hover: rgb(255 255 255 / 0.1);
+	--color-surface-veil: rgb(10 10 10 / 0.4);
 	--color-focus-ring: var(--neutral-100);
+
+	--cosmic-backdrop:
+		radial-gradient(
+			ellipse at 20% 30%,
+			rgb(88 28 135 / 0.3) 0%,
+			transparent 50%
+		),
+		radial-gradient(
+			ellipse at 80% 70%,
+			rgb(30 58 138 / 0.3) 0%,
+			transparent 50%
+		),
+		radial-gradient(ellipse at 50% 50%, rgb(5 5 5) 0%, rgb(0 0 0) 100%);
 }
 
 /* Minimal reset — there is no Tailwind preflight to inherit from. */
@@ -145,7 +170,10 @@ html {
 
 body {
 	margin: 0;
-	background-color: inherit;
+	/* Deliberately transparent: `html`'s background paints the canvas, below the
+	   fixed star field and nebula. An opaque body would cover both — they sit at
+	   a negative z-index, which is *under* body's own background. */
+	background-color: transparent;
 	color: var(--color-foreground);
 	font-family: var(--font-sans);
 	-webkit-font-smoothing: antialiased;

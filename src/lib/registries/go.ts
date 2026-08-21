@@ -101,7 +101,7 @@ export function createGoAdapter(fetcher: Fetcher = fetch): RegistryAdapter {
 	return {
 		id: "go",
 		label: "Go",
-		glow: "0, 173, 216",
+		tagline: "Go modules & standard ecosystem",
 		capabilities: {
 			discoverySearch: false,
 			searchHint: "Type a full module path, e.g. github.com/go-chi/chi/v5",

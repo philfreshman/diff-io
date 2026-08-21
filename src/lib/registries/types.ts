@@ -31,8 +31,8 @@ export interface RegistryAdapter {
 	id: RegistryId;
 	/** Display name: "crates.io", "Go". */
 	label: string;
-	/** Landing-tile accent, as the "r, g, b" triple its glow is built from. */
-	glow: string;
+	/** The ecosystem it serves, as the landing tile says it. */
+	tagline: string;
 	capabilities: RegistryCapabilities;
 	packagePath: PackagePath;
 	/** Packages matching what the user typed. */

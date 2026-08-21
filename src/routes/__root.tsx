@@ -5,7 +5,6 @@ import {
 	Scripts,
 } from "@tanstack/react-router";
 import { NotFound } from "#/components/NotFound.tsx";
-import { StarField } from "#/components/landing/StarField.tsx";
 import { ThemeToggle } from "#/components/theme/ThemeToggle.tsx";
 import { THEME_SCRIPT } from "#/lib/themeScript.ts";
 import globalsCss from "#/styles/globals.css?url";
@@ -35,7 +34,6 @@ function RootDocument() {
 				<script dangerouslySetInnerHTML={{ __html: THEME_SCRIPT }} />
 			</head>
 			<body>
-				<StarField />
 				<ThemeToggle />
 				<Outlet />
 				<Scripts />

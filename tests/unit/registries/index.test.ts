@@ -1,10 +1,14 @@
 import { describe, expect, test } from "bun:test";
+import { cratesAdapter } from "#/lib/registries/crates.ts";
+import { goAdapter } from "#/lib/registries/go.ts";
 import {
 	getAdapter,
 	isRegistryId,
 	registryAdapters,
 	requireAdapter,
 } from "#/lib/registries/index.ts";
+import { npmAdapter } from "#/lib/registries/npm.ts";
+import { pypiAdapter } from "#/lib/registries/pypi.ts";
 
 describe("getAdapter", () => {
 	test("finds each registry by its URL segment", () => {
@@ -38,11 +42,18 @@ describe("registryAdapters", () => {
 		]);
 	});
 
-	test("gives every registry a label and a glow for its tile", () => {
+	test("gives every registry the label and tagline its tile shows", () => {
 		for (const adapter of registryAdapters) {
 			expect(adapter.label.length).toBeGreaterThan(0);
-			expect(adapter.glow).toMatch(/^\d+, \d+, \d+$/);
+			expect(adapter.tagline.length).toBeGreaterThan(0);
 		}
+	});
+
+	test("names the ecosystem each registry serves, not the registry again", () => {
+		expect(npmAdapter.tagline).toBe("JavaScript & TypeScript packages");
+		expect(cratesAdapter.tagline).toBe("Rust ecosystem packages");
+		expect(goAdapter.tagline).toBe("Go modules & standard ecosystem");
+		expect(pypiAdapter.tagline).toBe("Python packages");
 	});
 });
 

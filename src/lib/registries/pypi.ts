@@ -23,7 +23,7 @@ export function createPypiAdapter(fetcher: Fetcher = fetch): RegistryAdapter {
 	return {
 		id: "pypi",
 		label: "PyPI",
-		glow: "59, 130, 246",
+		tagline: "Python packages",
 		capabilities: { discoverySearch: true },
 		packagePath: singleSegmentPath,
 

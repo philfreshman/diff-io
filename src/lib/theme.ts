@@ -77,6 +77,17 @@ export function applyTheme(doc: Document, selection: ThemeSelection): void {
 	meta.setAttribute("content", themeColor(resolved));
 }
 
+/**
+ * The theme currently on the document, which the pre-paint script writes before
+ * React exists. Anything that has to *render* differently per theme reads it
+ * from here rather than resolving the preference a second time.
+ */
+export function readAppliedTheme(doc: Document): ResolvedTheme {
+	return doc.documentElement.getAttribute(THEME_ATTRIBUTE) === "light"
+		? "light"
+		: "dark";
+}
+
 export const THEME_STORAGE_KEY = "theme";
 
 /**
