@@ -11,8 +11,6 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as RegistryRouteRouteImport } from './routes/$registry/route'
-import { Route as SpikeRouteImport } from './routes/spike'
-import { Route as SpikeComboboxRouteImport } from './routes/spike-combobox'
 import { Route as RegistryIndexRouteImport } from './routes/$registry/index'
 import { Route as RegistrySplatRouteImport } from './routes/$registry/$'
 
@@ -24,16 +22,6 @@ const IndexRoute = IndexRouteImport.update({
 const RegistryRouteRoute = RegistryRouteRouteImport.update({
   id: '/$registry',
   path: '/$registry',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const SpikeRoute = SpikeRouteImport.update({
-  id: '/spike',
-  path: '/spike',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const SpikeComboboxRoute = SpikeComboboxRouteImport.update({
-  id: '/spike-combobox',
-  path: '/spike-combobox',
   getParentRoute: () => rootRouteImport,
 } as any)
 const RegistryIndexRoute = RegistryIndexRouteImport.update({
@@ -50,15 +38,11 @@ const RegistrySplatRoute = RegistrySplatRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/$registry': typeof RegistryRouteRouteWithChildren
-  '/spike': typeof SpikeRoute
-  '/spike-combobox': typeof SpikeComboboxRoute
   '/$registry/$': typeof RegistrySplatRoute
   '/$registry/': typeof RegistryIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
-  '/spike': typeof SpikeRoute
-  '/spike-combobox': typeof SpikeComboboxRoute
   '/$registry/$': typeof RegistrySplatRoute
   '/$registry': typeof RegistryIndexRoute
 }
@@ -66,37 +50,20 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/$registry': typeof RegistryRouteRouteWithChildren
-  '/spike': typeof SpikeRoute
-  '/spike-combobox': typeof SpikeComboboxRoute
   '/$registry/$': typeof RegistrySplatRoute
   '/$registry/': typeof RegistryIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths:
-    | '/'
-    | '/$registry'
-    | '/spike'
-    | '/spike-combobox'
-    | '/$registry/$'
-    | '/$registry/'
+  fullPaths: '/' | '/$registry' | '/$registry/$' | '/$registry/'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/spike' | '/spike-combobox' | '/$registry/$' | '/$registry'
-  id:
-    | '__root__'
-    | '/'
-    | '/$registry'
-    | '/spike'
-    | '/spike-combobox'
-    | '/$registry/$'
-    | '/$registry/'
+  to: '/' | '/$registry/$' | '/$registry'
+  id: '__root__' | '/' | '/$registry' | '/$registry/$' | '/$registry/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   RegistryRouteRoute: typeof RegistryRouteRouteWithChildren
-  SpikeRoute: typeof SpikeRoute
-  SpikeComboboxRoute: typeof SpikeComboboxRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -113,20 +80,6 @@ declare module '@tanstack/react-router' {
       path: '/$registry'
       fullPath: '/$registry'
       preLoaderRoute: typeof RegistryRouteRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/spike': {
-      id: '/spike'
-      path: '/spike'
-      fullPath: '/spike'
-      preLoaderRoute: typeof SpikeRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/spike-combobox': {
-      id: '/spike-combobox'
-      path: '/spike-combobox'
-      fullPath: '/spike-combobox'
-      preLoaderRoute: typeof SpikeComboboxRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/$registry/': {
@@ -163,8 +116,6 @@ const RegistryRouteRouteWithChildren = RegistryRouteRoute._addFileChildren(
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   RegistryRouteRoute: RegistryRouteRouteWithChildren,
-  SpikeRoute: SpikeRoute,
-  SpikeComboboxRoute: SpikeComboboxRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
