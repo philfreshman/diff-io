@@ -1,9 +1,9 @@
 import { useNavigate } from "@tanstack/react-router";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { Button } from "#/components/ui/Button/Button.tsx";
 import type { RegistryAdapter } from "#/lib/registries/types.ts";
 import { buildPath, type DiffSlug } from "#/lib/url/slug.ts";
-import { diffClient } from "#/lib/worker/diffWorkerClient.ts";
+import { diffSession } from "#/lib/session/diffSession.ts";
 import { resolveSelection } from "./versionSelection.ts";
 import { useVersions } from "./useVersions.ts";
 import { VersionCombobox } from "./VersionCombobox.tsx";
@@ -49,16 +49,12 @@ export function VersionControls({
 		file: slug.file,
 	});
 
-	// Hovering Compare is a good guess, not a promise, so the worker is asked
-	// once per pair and its failures stay silent — the click is where an error
-	// has somewhere to be shown.
-	const prefetched = useRef(new Set<string>());
+	// Hovering Compare is a good guess, not a promise. The session owns the
+	// once-per-comparison rule and the silence on failure, because it is the
+	// same comparison the click would then start.
 	function prefetch() {
-		if (!ready || prefetched.current.has(target)) return;
-		prefetched.current.add(target);
-		diffClient
-			.prefetch({ registry: adapter.id, pkg: slug.package, from, to })
-			.catch(() => prefetched.current.delete(target));
+		if (!ready) return;
+		diffSession.prefetch({ registry: adapter.id, pkg: slug.package, from, to });
 	}
 
 	return (

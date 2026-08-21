@@ -84,7 +84,10 @@ test("selecting a result becomes the URL", async ({ page }) => {
 	await option(page, "express-session").click();
 
 	await expect(page).toHaveURL("/npm/express-session");
-	await expect(page.getByTestId("slug-package")).toHaveText("express-session");
+	await expect(page.getByTestId("workspace")).toHaveAttribute(
+		"data-package",
+		"express-session",
+	);
 });
 
 test("shows search, then a spinner, then a reset", async ({ page }) => {
@@ -171,7 +174,8 @@ test("tells a Go user what it can resolve, and takes a full module path", async 
 	await field(page).press("Enter");
 
 	await expect(page).toHaveURL("/go/github.com/go-chi/chi/v5");
-	await expect(page.getByTestId("slug-package")).toHaveText(
+	await expect(page.getByTestId("workspace")).toHaveAttribute(
+		"data-package",
 		"github.com/go-chi/chi/v5",
 	);
 });

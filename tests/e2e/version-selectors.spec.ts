@@ -110,8 +110,14 @@ test("Compare, and only Compare, writes the comparison to the URL", async ({
 
 	await compare(page).click();
 	await expect(page).toHaveURL("/npm/express/1.0.0/3.0.0");
-	await expect(page.getByTestId("slug-from")).toHaveText("1.0.0");
-	await expect(page.getByTestId("slug-to")).toHaveText("3.0.0");
+	await expect(page.getByTestId("workspace")).toHaveAttribute(
+		"data-from",
+		"1.0.0",
+	);
+	await expect(page.getByTestId("workspace")).toHaveAttribute(
+		"data-to",
+		"3.0.0",
+	);
 });
 
 test("keeps the open file when only the versions change", async ({ page }) => {
@@ -153,15 +159,21 @@ test("a new package clears the versions the last one had", async ({ page }) => {
 test("hovering Compare downloads the archives before the click", async ({
 	page,
 }) => {
-	// The real registry: prefetch runs inside the WASM worker, which fetches the
-	// tarballs itself. `node` is a two-file package, so this stays small.
+	// The version list is stubbed and the URL names no comparison, so the only
+	// thing that can reach for an archive is the hover. `node` is a two-file
+	// package, which keeps the download small; the tarballs themselves come from
+	// the real registry, fetched by the WASM worker itself.
+	await page.route("https://registry.npmjs.org/node", (route) =>
+		route.fulfill({ json: { versions: { "26.6.0": {}, "26.7.0": {} } } }),
+	);
 	const tarballs: string[] = [];
 	page.on("request", (request) => {
 		if (request.url().endsWith(".tgz")) tarballs.push(request.url());
 	});
 
-	await page.goto("/npm/node/26.6.0/26.7.0");
+	await page.goto("/npm/node");
 	await ready(page);
+	expect(tarballs).toHaveLength(0);
 
 	await compare(page).hover();
 

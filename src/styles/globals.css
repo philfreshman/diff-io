@@ -61,6 +61,9 @@
 	--color-accent: #2563eb;
 	--color-accent-hover: #1d4ed8;
 	--color-accent-foreground: #ffffff;
+	/* Something the user asked for did not happen — a comparison the engine
+	   could not build, a file it could not read. */
+	--color-danger: #b91c1c;
 
 	/* The night sky behind the landing page. Light theme has none — a component
 	   reads this token rather than branching on the theme itself. */
@@ -149,6 +152,7 @@
 	--color-accent: #2563eb;
 	--color-accent-hover: #3b82f6;
 	--color-accent-foreground: #ffffff;
+	--color-danger: #f87171;
 
 	--cosmic-backdrop:
 		radial-gradient(

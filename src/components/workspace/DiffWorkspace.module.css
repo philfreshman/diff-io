@@ -7,24 +7,78 @@
 .body {
 	display: flex;
 	flex: 1;
-	align-items: center;
-	justify-content: center;
+	flex-direction: column;
+	gap: var(--space-3);
+	padding: var(--space-4);
 }
 
-.selection {
-	display: grid;
-	grid-template-columns: auto auto;
-	gap: var(--space-1) var(--space-2);
+.status {
+	display: flex;
+	align-items: center;
+	gap: var(--space-2);
 	margin: 0;
 	color: var(--color-muted);
 }
 
-.selection dt {
-	text-align: right;
+.error {
+	margin: 0;
+	color: var(--color-danger);
+	font-family: var(--font-mono);
 }
 
-.selection dd {
+/* Two plain panels until the tree (task 10) and the viewer (task 12) land. */
+.panels {
+	display: flex;
+	flex: 1;
+	gap: var(--space-4);
+	min-height: 0;
+}
+
+.files {
+	flex: 0 0 20rem;
 	margin: 0;
-	color: var(--color-foreground);
+	padding: 0;
+	list-style: none;
+	overflow: auto;
 	font-family: var(--font-mono);
+	font-size: var(--text-sm);
+}
+
+.files a {
+	display: block;
+	padding: var(--space-1) var(--space-2);
+	border-radius: var(--radius-sm);
+	color: var(--color-foreground);
+	text-decoration: none;
+	white-space: nowrap;
+}
+
+.files a:hover,
+.files a:focus-visible {
+	background: var(--color-surface-veil);
+}
+
+.files a[data-active] {
+	background: var(--color-surface-veil);
+	color: var(--color-accent);
+}
+
+.file {
+	flex: 1;
+	min-width: 0;
+	overflow: auto;
+}
+
+.file h2 {
+	margin: 0 0 var(--space-2);
+	font-size: var(--text-sm);
+	font-family: var(--font-mono);
+	color: var(--color-muted);
+}
+
+.file pre {
+	margin: 0;
+	font-family: var(--font-mono);
+	font-size: var(--text-sm);
+	white-space: pre;
 }
