@@ -35,6 +35,15 @@ describe("resolveSelection", () => {
 		});
 	});
 
+	test("drops it from either half of the pair", () => {
+		// The same rule on the other side: `to` is checked against the list too,
+		// not merely defaulted when the URL leaves it out.
+		expect(resolveSelection(VERSIONS, { from: "1.0.0", to: "9.9.9" })).toEqual({
+			from: "1.0.0",
+			to: "3.0.0",
+		});
+	});
+
 	test("compares a lone version against itself", () => {
 		// A package with one release has no previous one; an empty field would
 		// leave Compare dead with nothing the user could do about it.

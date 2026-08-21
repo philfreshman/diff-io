@@ -67,6 +67,31 @@ test("typing filters the list, and closing puts the version back", async ({
 	await expect(from(page)).toHaveValue("1.0.0");
 });
 
+test("opening a list offers every version, not just the one chosen", async ({
+	page,
+}) => {
+	await stubVersions(page);
+	await page.goto("/npm/express");
+	await ready(page);
+
+	// The input doubles as the filter and already holds the selected version, so
+	// filtering by it would offer the one version there is no point choosing.
+	await from(page).click();
+	await expect(page.getByRole("option")).toHaveCount(3);
+});
+
+test("text nobody chose never becomes the comparison", async ({ page }) => {
+	await stubVersions(page);
+	await page.goto("/npm/express");
+	await ready(page);
+
+	await to(page).fill("2.0");
+	await to(page).press("Escape");
+
+	await compare(page).click();
+	await expect(page).toHaveURL("/npm/express/2.0.0/3.0.0");
+});
+
 test("offers each version as an archive to download", async ({ page }) => {
 	await stubVersions(page);
 	await page.goto("/npm/express");
@@ -84,6 +109,33 @@ test("offers each version as an archive to download", async ({ page }) => {
 		"href",
 		"https://registry.npmjs.org/express/-/express-3.0.0.tgz",
 	);
+
+	// The link is about the version in the field, so it follows a new choice —
+	// downloading what the user is looking at, not what they arrived with.
+	await from(page).click();
+	await page.getByRole("option", { name: "1.0.0" }).click();
+	await expect(
+		page.getByRole("link", { name: "Download 1.0.0" }),
+	).toHaveAttribute(
+		"href",
+		"https://registry.npmjs.org/express/-/express-1.0.0.tgz",
+	);
+});
+
+test("a package with no version list has nothing to compare", async ({
+	page,
+}) => {
+	// A package name that reaches the registry and finds nothing — a typo, or a
+	// module the proxy has never served.
+	await page.route(PACKAGE_DOC, (route) =>
+		route.fulfill({ status: 404, body: "" }),
+	);
+	await page.goto("/npm/express");
+	await expect(page.locator("[data-ready]").first()).toBeAttached();
+
+	await expect(from(page)).toBeDisabled();
+	await expect(to(page)).toBeDisabled();
+	await expect(compare(page)).toBeDisabled();
 });
 
 test("Compare is dead until there is something to compare", async ({
