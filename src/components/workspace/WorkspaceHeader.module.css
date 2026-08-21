@@ -22,12 +22,10 @@
 	display: flex;
 	min-width: 0;
 	flex: 1;
+	max-width: 64rem;
 	align-items: flex-end;
 	gap: var(--space-4);
 }
 
-/* The package field is the widest control in the row; the version selectors
-   task 8 adds sit beside it at their own natural width. */
-.controls > * {
-	width: min(22rem, 100%);
-}
+/* Each control claims its own share of the row — the package name is the
+   longest text in it, the versions are short, Compare is a fixed label. */
