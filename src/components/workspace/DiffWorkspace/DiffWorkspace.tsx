@@ -1,4 +1,6 @@
 import { useNavigate } from "@tanstack/react-router";
+import { DiffView } from "#/components/diff/DiffView/DiffView.tsx";
+import { useDiffView } from "#/components/diff/useDiffView.ts";
 import { TreePanel } from "#/components/tree/TreePanel/TreePanel.tsx";
 import { Spinner } from "#/components/ui/Spinner/Spinner.tsx";
 import { requireAdapter } from "#/lib/registries/index.ts";
@@ -12,20 +14,26 @@ import styles from "./DiffWorkspace.module.css";
  * The workspace shell: the header assembles a comparison, the body shows the
  * one the URL already names.
  *
- * The body's two panels are deliberately plain — the file list is replaced by
- * the real tree in task 10, and the diff by the virtualised renderer in task
- * 12. What is real here is the binding: the session's status, its errors, and
- * the fact that opening a file is a URL write like any other navigation.
+ * Opening a file is a URL write like any other navigation, and how much of a
+ * file is open lives here rather than in the viewer — the viewer is mounted
+ * per file, and that is exactly what has to survive clicking through the tree
+ * and back.
  */
 export function DiffWorkspace({ slug }: { slug: DiffSlug }) {
 	const adapter = requireAdapter(slug.registry);
 	const navigate = useNavigate();
 	const session = useDiffSession(slug);
 	const files = flattenFiles(session.tree);
+	const viewer = useDiffView(session.key, session.file?.path ?? "");
 	// Opening a file is a URL write like any other navigation; the session
 	// follows the address, never the click.
 	function openFile(file: string) {
 		navigate({ to: buildPath(adapter, { ...slug, file }) });
+	}
+
+	/** Closing a file is the same write with nothing in the file segment. */
+	function closeFile() {
+		navigate({ to: buildPath(adapter, { ...slug, file: "" }) });
 	}
 
 	return (
@@ -80,7 +88,18 @@ export function DiffWorkspace({ slug }: { slug: DiffSlug }) {
 									</p>
 								)}
 								{session.file.diff && (
-									<pre data-testid="file-diff">{session.file.diff.data}</pre>
+									// Keyed by path: a new file is a new view, which is what
+									// makes restoring its scroll a plain mount effect.
+									<DiffView
+										file={session.file.diff}
+										key={session.file.path}
+										onClose={closeFile}
+										onReveal={viewer.reveal}
+										onScrolled={viewer.rememberScroll}
+										path={session.file.path}
+										split={viewer.split}
+										view={viewer.view}
+									/>
 								)}
 							</section>
 						)}

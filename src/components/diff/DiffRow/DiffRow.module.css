@@ -1,0 +1,56 @@
+/*
+ * One line of the file. Every row in the viewer is placed at its own offset by
+ * the virtualiser, which is why `.row` is positioned here and composed by the
+ * split and fold rows.
+ *
+ * The two gutters are fixed at `--gutter-width` — set once per file from its
+ * highest line number — so the content column does not shift sideways as a
+ * virtualised scroll reaches longer numbers.
+ */
+.row {
+	position: absolute;
+	top: 0;
+	left: 0;
+	width: 100%;
+	display: flex;
+	align-items: stretch;
+	line-height: var(--diff-line-height);
+	font-family: var(--font-mono);
+	font-size: var(--text-sm);
+}
+
+.gutter {
+	flex: 0 0 var(--gutter-width);
+	width: var(--gutter-width);
+	padding: 0 var(--space-2);
+	border-right: 1px solid var(--color-border);
+	color: var(--color-muted);
+	text-align: right;
+	user-select: none;
+}
+
+.content {
+	flex: 1;
+	min-width: 0;
+	padding: 0 var(--space-3);
+	white-space: pre-wrap;
+	overflow-wrap: anywhere;
+}
+
+.row[data-type="added"] {
+	background: var(--color-added-surface);
+}
+
+.row[data-type="removed"] {
+	background: var(--color-removed-surface);
+}
+
+.row[data-type="added"] .gutter[data-filled] {
+	background: var(--color-added-gutter);
+	border-right-color: var(--color-added-gutter-border);
+}
+
+.row[data-type="removed"] .gutter[data-filled] {
+	background: var(--color-removed-gutter);
+	border-right-color: var(--color-removed-gutter-border);
+}

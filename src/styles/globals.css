@@ -72,6 +72,22 @@
 	/* The row the URL names, in the tree. */
 	--color-selected-surface: #eff6ff;
 
+	/* --- The diff itself -------------------------------------------------
+	   GitHub's diff palette, carried over unchanged: a wash across the row and
+	   a stronger one in its gutter, so a line reads as added or removed at a
+	   glance and its number does too. `--color-added` above is a foreground;
+	   these are surfaces, and the two are not interchangeable. */
+	--color-added-surface: #e6ffec;
+	--color-added-gutter: #cdffd8;
+	--color-added-gutter-border: #bef5cb;
+	--color-removed-surface: #ffeef0;
+	--color-removed-gutter: #ffdce0;
+	--color-removed-gutter-border: #fdaeb7;
+	/* A fold: the lines nothing happened to, stood down out of the way. */
+	--color-fold-surface: #f1f8ff;
+	--color-fold-gutter: #dbedff;
+	--color-fold-gutter-border: #c8e1ff;
+
 	/* The night sky behind the landing page. Light theme has none — a component
 	   reads this token rather than branching on the theme itself. */
 	--cosmic-backdrop: none;
@@ -165,6 +181,15 @@
 	--color-renamed: #fbbf24;
 	--color-renamed-surface: rgb(120 53 15 / 0.3);
 	--color-selected-surface: rgb(30 58 138 / 0.2);
+	--color-added-surface: #233329;
+	--color-added-gutter: #1a3a2a;
+	--color-added-gutter-border: #2b4b3b;
+	--color-removed-surface: #442d30;
+	--color-removed-gutter: #61222a;
+	--color-removed-gutter-border: #6e363b;
+	--color-fold-surface: #1e2836;
+	--color-fold-gutter: #263449;
+	--color-fold-gutter-border: #38444d;
 
 	--cosmic-backdrop:
 		radial-gradient(
