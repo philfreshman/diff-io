@@ -1,4 +1,5 @@
 import { useNavigate } from "@tanstack/react-router";
+import { DiffToolbar } from "#/components/diff/DiffToolbar/DiffToolbar.tsx";
 import { DiffView } from "#/components/diff/DiffView/DiffView.tsx";
 import { useDiffView } from "#/components/diff/useDiffView.ts";
 import { TreePanel } from "#/components/tree/TreePanel/TreePanel.tsx";
@@ -78,7 +79,13 @@ export function DiffWorkspace({ slug }: { slug: DiffSlug }) {
 						/>
 						{session.file && (
 							<section className={styles.file} data-testid="diff-file">
-								<h2>{session.file.path}</h2>
+								<DiffToolbar
+									path={session.file.path}
+									expandAll={viewer.view.expandAll}
+									onExpandAllChange={viewer.setExpandAll}
+									split={viewer.split}
+									onSplitChange={viewer.setSplit}
+								/>
 								{session.file.status === "loading" && (
 									<Spinner label={`Loading ${session.file.path}…`} />
 								)}

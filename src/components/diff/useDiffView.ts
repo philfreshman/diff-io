@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import type { Expander } from "#/lib/diff/computeVisibility.ts";
-import { readSplitView } from "#/lib/diff/prefs.ts";
+import { readSplitView, writeSplitView } from "#/lib/diff/prefs.ts";
 import {
 	emptyMemory,
 	type FileView,
@@ -44,8 +44,14 @@ export function useDiffView(
 	// A stored preference cannot be read during render — the server has no
 	// `localStorage`, and reading it in the first client render is the same
 	// mismatch. Unified is what SSR shows; the effect corrects it.
-	const [split, setSplit] = useState(false);
-	useEffect(() => setSplit(readSplitView()), []);
+	const [split, showSplit] = useState(false);
+	useEffect(() => showSplit(readSplitView()), []);
+	// The toolbar's toggle writes the preference as it flips it: which layout a
+	// diff is read in is a habit, not a decision to make again per file.
+	const setSplit = useCallback((next: boolean) => {
+		showSplit(next);
+		writeSplitView(next);
+	}, []);
 
 	return {
 		view: fileView(memory, path),

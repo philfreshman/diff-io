@@ -1,4 +1,5 @@
 import type { VirtualRowProps } from "#/components/diff/virtualRow.ts";
+import { highlightLine } from "#/lib/diff/highlight.ts";
 import type { DiffLine } from "#/lib/diff/parseUnifiedDiff.ts";
 import styles from "./DiffRow.module.css";
 
@@ -9,10 +10,11 @@ import styles from "./DiffRow.module.css";
  */
 export function DiffRow({
 	line,
+	language,
 	index,
 	style,
 	ref,
-}: VirtualRowProps & { line: DiffLine }) {
+}: VirtualRowProps & { line: DiffLine; language: string | null }) {
 	return (
 		<tr
 			className={styles.row}
@@ -35,7 +37,15 @@ export function DiffRow({
 			>
 				{line.newNumber}
 			</td>
-			<td className={styles.content}>{line.content || " "}</td>
+			<td
+				className={styles.content}
+				// highlight.js escapes what it is given, and `highlightLine` escapes
+				// what it does not highlight — nothing reaches the DOM as markup.
+				// biome-ignore lint/security/noDangerouslySetInnerHtml: the highlighter's output is markup by definition
+				dangerouslySetInnerHTML={{
+					__html: highlightLine(line.content, language) || " ",
+				}}
+			/>
 		</tr>
 	);
 }

@@ -62,6 +62,12 @@ test("opens a fold twenty lines at a time", async ({ page }) => {
 	const start = Number(await stepped.getAttribute("data-start"));
 	const count = Number(await stepped.getAttribute("data-count"));
 	await stepped.getByRole("button", { name: "Expand 20 lines down" }).click();
+	// The twenty lines it revealed push what is left of the fold below the
+	// window, and a virtualised list draws only what is near it — so follow it
+	// down the twenty rows it moved.
+	await page.getByTestId("diff-scroller").evaluate((node) => {
+		node.scrollTop += 20 * 24;
+	});
 
 	// Twenty lines were offered and twenty is what it gave: what is left of the
 	// fold starts twenty lines further down and is twenty lines shorter.
