@@ -36,39 +36,54 @@ test("opening a file writes the URL and renders its diff", async ({ page }) => {
 	await files(page).filter({ hasText: "package.json" }).click();
 
 	await expect(page).toHaveURL(`${NODE}/package.json`);
-	const diff = page.getByTestId("file-diff");
-	await expect(diff).toContainText('- "version": "26.6.0"');
-	await expect(diff).toContainText('+ "version": "26.7.0"');
+	const view = page.getByTestId("diff-view");
+	await expect(
+		view.locator('tr[data-type="removed"]').filter({ hasText: "26.6.0" }),
+	).toHaveCount(1);
+	await expect(
+		view.locator('tr[data-type="added"]').filter({ hasText: "26.7.0" }),
+	).toHaveCount(1);
 });
 
 test("a deep link to a file opens it without a click", async ({ page }) => {
 	await page.goto(`${NODE}/package.json`);
 	await ready(page);
 
-	await expect(page.getByTestId("diff-file")).toContainText("package.json");
-	await expect(page.getByTestId("file-diff")).toContainText("26.7.0");
+	await expect(page.getByTestId("diff-view")).toHaveAttribute(
+		"data-path",
+		"package.json",
+	);
+	await expect(page.getByTestId("diff-view")).toContainText("26.7.0");
 });
 
 test("the file on screen is the file last asked for", async ({ page }) => {
 	await page.goto(NODE);
 	await ready(page);
 
-	// Clicked back to back: the reply to the first must not overwrite the
-	// second, whichever order the worker answers in.
 	// By path, not by row text: a row also carries its `+n`/`-n` counts.
 	const [first, second] = await files(page).evaluateAll((rows) =>
 		rows.map((row) => row.getAttribute("data-path") ?? ""),
 	);
 	expect(second).toBeDefined();
+
+	// What the second file looks like on its own, so a stale reply carrying the
+	// first file's lines is a different answer and not just a different label.
+	// The engine's `--- from/…` header, which the old assertion read, is not
+	// rendered any more — the parser strips it (task 11).
+	await page.goto(`${NODE}/${second}`);
+	const alone = await page.getByTestId("diff-view").getAttribute("data-rows");
+
+	await page.goto(NODE);
+	await ready(page);
+	// Clicked back to back: the reply to the first must not overwrite the
+	// second, whichever order the worker answers in.
 	await files(page).nth(0).click();
 	await files(page).nth(1).click();
 
-	await expect(page.getByTestId("diff-file")).toContainText(String(second));
-	// The header names the file the engine actually diffed, which is what
-	// distinguishes a correctly correlated reply from a stale one.
-	await expect(page.getByTestId("file-diff")).not.toContainText(
-		`--- from/${first}`,
-	);
+	const view = page.getByTestId("diff-view");
+	await expect(view).toHaveAttribute("data-path", String(second));
+	await expect(view).toHaveAttribute("data-rows", alone ?? "");
+	expect(first).not.toBe(second);
 });
 
 test("says so when the comparison cannot be built", async ({ page }) => {

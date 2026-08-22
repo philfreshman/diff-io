@@ -1,12 +1,18 @@
+/*
+ * The workspace fills the window and nothing else scrolls: the tree and the
+ * diff each scroll inside their own pane, which is what lets the viewer
+ * virtualise — a scroller as tall as its content has no rows off screen.
+ */
 .workspace {
 	display: flex;
-	min-height: 100dvh;
+	height: 100dvh;
 	flex-direction: column;
 }
 
 .body {
 	display: flex;
 	flex: 1;
+	min-height: 0;
 	flex-direction: column;
 	gap: var(--space-3);
 	padding: var(--space-4);
@@ -26,7 +32,6 @@
 	font-family: var(--font-mono);
 }
 
-/* Two plain panels until the tree (task 10) and the viewer (task 12) land. */
 .panels {
 	display: flex;
 	flex: 1;
@@ -34,39 +39,12 @@
 	min-height: 0;
 }
 
-.files {
-	flex: 0 0 20rem;
-	margin: 0;
-	padding: 0;
-	list-style: none;
-	overflow: auto;
-	font-family: var(--font-mono);
-	font-size: var(--text-sm);
-}
-
-.files a {
-	display: block;
-	padding: var(--space-1) var(--space-2);
-	border-radius: var(--radius-sm);
-	color: var(--color-foreground);
-	text-decoration: none;
-	white-space: nowrap;
-}
-
-.files a:hover,
-.files a:focus-visible {
-	background: var(--color-surface-veil);
-}
-
-.files a[data-active] {
-	background: var(--color-surface-veil);
-	color: var(--color-accent);
-}
-
 .file {
+	display: flex;
 	flex: 1;
 	min-width: 0;
-	overflow: auto;
+	min-height: 0;
+	flex-direction: column;
 }
 
 .file h2 {
@@ -74,11 +52,4 @@
 	font-size: var(--text-sm);
 	font-family: var(--font-mono);
 	color: var(--color-muted);
-}
-
-.file pre {
-	margin: 0;
-	font-family: var(--font-mono);
-	font-size: var(--text-sm);
-	white-space: pre;
 }

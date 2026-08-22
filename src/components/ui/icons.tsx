@@ -138,3 +138,27 @@ export function FileIcon(props: IconProps) {
 		</Icon>
 	);
 }
+
+export function FoldDownIcon(props: IconProps) {
+	return (
+		<Icon {...props}>
+			<path d="M12 4v9M8 9l4 4 4-4M4 19h2M11 19h2M18 19h2" />
+		</Icon>
+	);
+}
+
+export function FoldUpIcon(props: IconProps) {
+	return (
+		<Icon {...props}>
+			<path d="M12 20v-9M8 15l4-4 4 4M4 5h2M11 5h2M18 5h2" />
+		</Icon>
+	);
+}
+
+export function UnfoldIcon(props: IconProps) {
+	return (
+		<Icon {...props}>
+			<path d="M12 3v5M9 6l3-3 3 3M12 21v-5M9 18l3 3 3-3M4 12h2M11 12h2M18 12h2" />
+		</Icon>
+	);
+}

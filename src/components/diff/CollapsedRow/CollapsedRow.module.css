@@ -1,0 +1,47 @@
+/*
+ * A fold: the lines nothing happened to, stood down out of the way, with the
+ * ways of opening it attached. Its expanders sit in the gutters — two columns
+ * wide, since a fold has no line number to put there.
+ */
+.row {
+	composes: row from "../DiffRow/DiffRow.module.css";
+	background: var(--color-fold-surface);
+	color: var(--color-muted);
+}
+
+.expanders {
+	display: flex;
+	flex: 0 0 calc(2 * var(--gutter-width));
+	width: calc(2 * var(--gutter-width));
+	flex-direction: column;
+	align-items: center;
+	justify-content: center;
+	background: var(--color-fold-gutter);
+	border-right: 1px solid var(--color-fold-gutter-border);
+	padding: 0;
+}
+
+.label {
+	display: flex;
+	flex: 1;
+	min-width: 0;
+	align-items: center;
+	gap: var(--space-2);
+	padding: 0 var(--space-3);
+	font-style: italic;
+	white-space: nowrap;
+	overflow: hidden;
+}
+
+.expander {
+	height: auto;
+	min-height: 0;
+	padding: 0 var(--space-1);
+	color: inherit;
+}
+
+.expander:hover,
+.expander:focus-visible {
+	background: var(--color-fold-gutter-border);
+	color: var(--color-accent);
+}
