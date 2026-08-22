@@ -1,0 +1,35 @@
+/*
+ * A label and the platform's own select. The select is stripped back to the
+ * toolbar's type rather than restyled — the popup is the browser's either way,
+ * and a half-styled control is worse than an unstyled one.
+ */
+.picker {
+	display: flex;
+	align-items: center;
+	gap: var(--space-2);
+}
+
+.label {
+	color: var(--color-muted);
+	font-size: var(--text-xs);
+}
+
+.select {
+	border: 0;
+	background: transparent;
+	color: var(--color-foreground);
+	font-family: inherit;
+	font-size: var(--text-xs);
+	cursor: pointer;
+}
+
+.select:disabled {
+	cursor: default;
+	opacity: 0.6;
+}
+
+.select:focus-visible {
+	outline: 2px solid var(--color-focus-ring);
+	outline-offset: 2px;
+	border-radius: var(--radius-sm);
+}

@@ -46,10 +46,3 @@
 	min-height: 0;
 	flex-direction: column;
 }
-
-.file h2 {
-	margin: 0 0 var(--space-2);
-	font-size: var(--text-sm);
-	font-family: var(--font-mono);
-	color: var(--color-muted);
-}

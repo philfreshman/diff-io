@@ -9,6 +9,7 @@ import {
 	type Expander,
 } from "#/lib/diff/computeVisibility.ts";
 import { gutterChars } from "#/lib/diff/gutter.ts";
+import { detectLanguage } from "#/lib/diff/highlight.ts";
 import { pairSplitRows } from "#/lib/diff/pairSplitRows.ts";
 import { parseUnifiedDiff } from "#/lib/diff/parseUnifiedDiff.ts";
 import type { FileView } from "#/lib/diff/viewMemory.ts";
@@ -53,6 +54,9 @@ export function DiffView({
 	onClose,
 }: DiffViewProps) {
 	const lines = useMemo(() => parseUnifiedDiff(file), [file]);
+	// Decided once for the whole file: per line it would be both slower and
+	// inconsistent, since a line like `}` tells a highlighter nothing.
+	const language = useMemo(() => detectLanguage(path, lines), [path, lines]);
 	const unified = useMemo(() => computeVisibility(lines, view), [lines, view]);
 	// Split view is the same rows in two columns, so the folds survive it as
 	// full-width rows rather than being paired against anything.
@@ -113,14 +117,20 @@ export function DiffView({
 			data-path={path}
 			// How much of the file is showing: rows, folds included.
 			data-rows={rows.length}
+			// What the file was taken to be written in — the one decision the
+			// colouring of every row follows from.
+			data-language={language ?? ""}
 			style={
 				{
 					"--gutter-width": `calc(${gutterChars(lines)}ch + var(--space-4))`,
 				} as CSSProperties
 			}
 		>
+			{/* `hljs` is what the theme's stylesheet colours: it carries the
+			    theme's background and base text colour, and the added and removed
+			    surfaces paint over it. */}
 			<div
-				className={styles.scroller}
+				className={`${styles.scroller} hljs`}
 				ref={scroller}
 				data-testid="diff-scroller"
 				onScroll={(event) => {
@@ -146,6 +156,7 @@ export function DiffView({
 								return (
 									<SplitDiffRow
 										key={item.key}
+										language={language}
 										left={row.left}
 										right={row.right}
 										{...placement}
@@ -154,7 +165,12 @@ export function DiffView({
 							}
 
 							return row.kind === "line" ? (
-								<DiffRow key={item.key} line={row.line} {...placement} />
+								<DiffRow
+									key={item.key}
+									language={language}
+									line={row.line}
+									{...placement}
+								/>
 							) : (
 								<CollapsedRow
 									fold={row}

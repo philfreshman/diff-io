@@ -155,6 +155,32 @@ export function FoldUpIcon(props: IconProps) {
 	);
 }
 
+export function SplitViewIcon(props: IconProps) {
+	return (
+		<Icon {...props}>
+			<rect x="3" y="4" width="18" height="16" rx="2" />
+			<path d="M12 4v16" />
+		</Icon>
+	);
+}
+
+export function UnifiedViewIcon(props: IconProps) {
+	return (
+		<Icon {...props}>
+			<rect x="3" y="4" width="18" height="16" rx="2" />
+			<path d="M3 12h18" />
+		</Icon>
+	);
+}
+
+export function FoldIcon(props: IconProps) {
+	return (
+		<Icon {...props}>
+			<path d="M12 8V3M9 5l3 3 3-3M12 16v5M9 19l3-3 3 3M4 12h2M11 12h2M18 12h2" />
+		</Icon>
+	);
+}
+
 export function UnfoldIcon(props: IconProps) {
 	return (
 		<Icon {...props}>
