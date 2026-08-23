@@ -42,5 +42,14 @@ export function documentMeta(
 export function metaTags(adapter: RegistryAdapter, slug: DiffSlug) {
 	const { title, description } = documentMeta(adapter, slug);
 
-	return [{ title }, { name: "description", content: description }];
+	return [
+		{ title },
+		{ name: "description", content: description },
+		// A link to a diff is shared far more often than the front page is, so
+		// the preview names the comparison rather than the site.
+		{ property: "og:title", content: title },
+		{ property: "og:description", content: description },
+		{ property: "twitter:title", content: title },
+		{ property: "twitter:description", content: description },
+	];
 }
