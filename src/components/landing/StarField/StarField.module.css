@@ -8,18 +8,17 @@
 	z-index: var(--z-background);
 	pointer-events: none;
 	opacity: 0;
-	animation: fadeIn var(--duration-slow) ease-in forwards;
+	transition: opacity var(--duration-slow) ease-in;
 }
 
-@keyframes fadeIn {
-	to {
-		opacity: 1;
-	}
+/* Set by the component once it has actually put a frame on the canvas, so the
+   sky never fades up over an empty one. */
+.starField[data-drawn="true"] {
+	opacity: 1;
 }
 
 @media (prefers-reduced-motion: reduce) {
 	.starField {
-		opacity: 1;
-		animation: none;
+		transition: none;
 	}
 }
