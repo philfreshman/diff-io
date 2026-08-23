@@ -2,6 +2,7 @@ import { useVirtualizer } from "@tanstack/react-virtual";
 import type { CSSProperties } from "react";
 import { useEffect, useMemo, useRef } from "react";
 import { CollapsedRow } from "#/components/diff/CollapsedRow/CollapsedRow.tsx";
+import { DiffScrollbar } from "#/components/diff/DiffScrollbar/DiffScrollbar.tsx";
 import { DiffRow } from "#/components/diff/DiffRow/DiffRow.tsx";
 import { SplitDiffRow } from "#/components/diff/SplitDiffRow/SplitDiffRow.tsx";
 import {
@@ -12,6 +13,7 @@ import { gutterChars } from "#/lib/diff/gutter.ts";
 import { detectLanguage } from "#/lib/diff/highlight.ts";
 import { pairSplitRows } from "#/lib/diff/pairSplitRows.ts";
 import { parseUnifiedDiff } from "#/lib/diff/parseUnifiedDiff.ts";
+import { changeMarkers } from "#/lib/diff/scrollbar.ts";
 import type { FileView } from "#/lib/diff/viewMemory.ts";
 import type { FileDiff } from "#/lib/worker/protocol.ts";
 import styles from "./DiffView.module.css";
@@ -64,6 +66,11 @@ export function DiffView({
 		() => (split ? pairSplitRows(unified) : unified),
 		[split, unified],
 	);
+
+	// From the rows rather than from the DOM: the list is virtualised, so
+	// markers measured off rendered rows would only ever cover the part of the
+	// file already on screen.
+	const markers = useMemo(() => changeMarkers(rows), [rows]);
 
 	const scroller = useRef<HTMLDivElement>(null);
 	const virtualizer = useVirtualizer({
@@ -183,6 +190,7 @@ export function DiffView({
 					</tbody>
 				</table>
 			</div>
+			<DiffScrollbar markers={markers} scroller={scroller} />
 		</div>
 	);
 }
