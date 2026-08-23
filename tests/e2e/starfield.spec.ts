@@ -1,32 +1,17 @@
 import { expect, type Page, test } from "@playwright/test";
 
-/** Counts non-transparent pixels, i.e. how much of the sky actually got drawn. */
-function paintedPixels(page: Page) {
-	return page.evaluate(() => {
-		const canvas = document.querySelector<HTMLCanvasElement>(
-			'[data-testid="star-field"]',
-		);
-		if (!canvas) throw new Error("star field canvas is not in the document");
-		const context = canvas.getContext("2d");
-		if (!context) throw new Error("star field canvas has no 2d context");
-		const { data } = context.getImageData(0, 0, canvas.width, canvas.height);
-		let painted = 0;
-		for (let i = 3; i < data.length; i += 4) {
-			if ((data[i] ?? 0) > 0) painted += 1;
-		}
-		return painted;
-	});
-}
-
-/** A cheap fingerprint of what is currently on the canvas. */
-function canvasSignature(page: Page) {
-	return page.evaluate(() => {
-		const canvas = document.querySelector<HTMLCanvasElement>(
-			'[data-testid="star-field"]',
-		);
-		if (!canvas) throw new Error("star field canvas is not in the document");
-		return canvas.toDataURL();
-	});
+/**
+ * The sky is a WebGL canvas, so there is nothing to read back out of it: its
+ * drawing buffer is undefined once the browser has composited it, and asking
+ * for a 2d context on it fails outright. What the component offers instead is
+ * `data-drawn`, set the first time a frame actually reaches the canvas — which
+ * is the thing worth waiting for anyway.
+ */
+function skyIsDrawn(page: Page) {
+	return expect(page.getByTestId("star-field")).toHaveAttribute(
+		"data-drawn",
+		"true",
+	);
 }
 
 test("paints a star field behind the page", async ({ page }) => {
@@ -38,7 +23,7 @@ test("paints a star field behind the page", async ({ page }) => {
 
 	await page.goto("/");
 	await expect(page.getByTestId("star-field")).toBeAttached();
-	await expect.poll(() => paintedPixels(page)).toBeGreaterThan(0);
+	await skyIsDrawn(page);
 
 	expect(errors).toEqual([]);
 });
@@ -61,13 +46,14 @@ test("holds the sky still when the visitor asks for reduced motion", async ({
 	// The sky is client-only now that it depends on the theme, so the canvas
 	// arrives after hydration rather than in the server's HTML.
 	await expect(page.getByTestId("star-field")).toBeAttached();
-	await expect.poll(() => paintedPixels(page)).toBeGreaterThan(0);
+	await skyIsDrawn(page);
 
-	// Stars pulse and shooting stars travel, so an animating field repaints
-	// differently from one frame to the next; a still one does not.
-	const first = await canvasSignature(page);
+	// Marks pulse, the field drifts and shooting stars travel, so an animating
+	// sky composites differently from one moment to the next; a still one does
+	// not. The screenshot is the only honest way to compare — see above.
+	const first = await page.screenshot();
 	await page.waitForTimeout(600);
-	expect(await canvasSignature(page)).toBe(first);
+	expect((await page.screenshot()).equals(first)).toBe(true);
 });
 
 test("the sky reaches the screen, rather than being painted over", async ({
@@ -78,7 +64,7 @@ test("the sky reaches the screen, rather than being painted over", async ({
 	const page = await browser.newPage({ reducedMotion: "reduce" });
 	await page.goto("/");
 	await expect(page.getByTestId("star-field")).toBeAttached();
-	await expect.poll(() => paintedPixels(page)).toBeGreaterThan(0);
+	await skyIsDrawn(page);
 
 	const sky = await page.screenshot();
 	await page.addStyleTag({
