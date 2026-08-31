@@ -2,12 +2,50 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { tanstackStart } from "@tanstack/react-start/plugin/vite";
 import viteReact from "@vitejs/plugin-react";
+import { nitro } from "nitro/vite";
 import { defineConfig } from "vite";
 
 const rootDir = path.dirname(fileURLToPath(import.meta.url));
 
 export default defineConfig({
-	plugins: [tanstackStart(), viteReact()],
+	// Nitro turns the Start server build into a deployable server: on Vercel it
+	// is what produces `.vercel/output` and the function the site is served
+	// from. Without it `vite build` emits a bare `dist/server/server.js` that
+	// the host has no idea what to do with.
+	//
+	// The cache headers live here rather than in `vercel.json` because a build
+	// that writes `.vercel/output/config.json` brings its own routing table —
+	// `headers` left in `vercel.json` would be a file nobody reads. These end
+	// up in that generated config, which is checkable without deploying.
+	plugins: [
+		tanstackStart(),
+		nitro({
+			routeRules: {
+				// The Astro site served `/index.html`; anything still linking to it
+				// should land on the home page rather than the catch-all route's
+				// 404.
+				"/index.html": { redirect: { to: "/", status: 301 } },
+				// Hashed filenames, immutable by construction. `/assets/**` — which
+				// is where the hashed `.wasm` lands too — nitro covers itself; the
+				// fonts are copied from `public/` and need saying.
+				"/fonts/**": {
+					headers: {
+						"cache-control": "public, max-age=31536000, immutable",
+					},
+				},
+				// Everything else is server-rendered HTML: never trusted by the
+				// browser, held briefly at the edge, and served stale while it is
+				// revalidated. Same policy the Astro site was deployed under.
+				"/**": {
+					headers: {
+						"cache-control":
+							"public, max-age=0, s-maxage=300, stale-while-revalidate=86400",
+					},
+				},
+			},
+		}),
+		viteReact(),
+	],
 	resolve: {
 		tsconfigPaths: true,
 		alias: {
