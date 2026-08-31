@@ -1,41 +1,5 @@
 {
+	"$schema": "https://openapi.vercel.sh/vercel.json",
 	"installCommand": "rustup target add wasm32-unknown-unknown && bun run build:wasm && bun install",
-	"buildCommand": "bun run build",
-	"cleanUrls": true,
-	"trailingSlash": false,
-	"redirects": [
-		{
-			"source": "/index.html",
-			"destination": "/",
-			"permanent": true
-		},
-		{
-			"source": "/(.*)",
-			"has": [
-				{ "type": "host", "value": "www.diffpack.io" }
-			],
-			"destination": "https://diffpack.io/$1",
-			"permanent": true
-		}
-	],
-	"headers": [
-		{
-			"source": "/assets/(.*)",
-			"headers": [
-				{ "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }
-			]
-		},
-		{
-			"source": "/(.*)\\.wasm",
-			"headers": [
-				{ "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }
-			]
-		},
-		{
-			"source": "/(.*)",
-			"headers": [
-				{ "key": "Cache-Control", "value": "public, max-age=0, s-maxage=300, stale-while-revalidate=86400" }
-			]
-		}
-	]
+	"buildCommand": "bun run build"
 }

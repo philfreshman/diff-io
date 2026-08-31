@@ -9,6 +9,7 @@
 		"includes": [
 			"src/**/*",
 			"tests/**/*",
+			"scripts/**/*",
 			"*.ts",
 			"package.json",
 			"tsconfig.json",
