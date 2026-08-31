@@ -1,0 +1,58 @@
+/*
+ * The track sits over the right edge of the scroller rather than beside it, so
+ * showing and hiding it never reflows the file.
+ */
+.track {
+	position: absolute;
+	top: 0;
+	right: 0;
+	bottom: 0;
+	width: var(--diff-scrollbar-width, 0.875rem);
+	background: var(--color-surface);
+	border-left: 1px solid var(--color-border);
+	opacity: 0;
+	transition: opacity 150ms ease;
+	cursor: pointer;
+}
+
+.track[data-shown="true"] {
+	opacity: 1;
+}
+
+/* The minimap: where the file's changes are, whether or not they are rendered.
+   The markers use the foreground colours a file's status is written in, not the
+   diff's row washes — a few pixels of a wash reads as nothing. */
+.marker {
+	position: absolute;
+	left: 0;
+	width: 100%;
+	/* A single changed line in a long file is a sliver; this keeps it visible. */
+	min-height: 2px;
+}
+
+.marker[data-type="added"] {
+	background: var(--color-added);
+}
+
+.marker[data-type="removed"] {
+	background: var(--color-removed);
+}
+
+.marker[data-type="modified"] {
+	background: var(--color-renamed);
+}
+
+.thumb {
+	position: absolute;
+	left: 0;
+	width: 100%;
+	border-radius: var(--radius-sm);
+	background: var(--color-muted);
+	opacity: 0.6;
+	cursor: default;
+}
+
+.thumb:hover,
+.track:active .thumb {
+	opacity: 1;
+}

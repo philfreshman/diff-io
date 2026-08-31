@@ -1,0 +1,92 @@
+.tree {
+	overflow: auto;
+	font-size: var(--text-sm);
+}
+
+.row {
+	display: flex;
+	align-items: center;
+	gap: var(--space-1);
+	padding: var(--space-1) var(--space-3) var(--space-1) var(--space-1);
+	border-radius: var(--radius-md);
+	cursor: pointer;
+	user-select: none;
+}
+
+.row:hover {
+	background: var(--color-surface-hover);
+}
+
+.row:focus-visible {
+	outline: 1px solid var(--color-accent);
+	outline-offset: -1px;
+}
+
+.row[aria-selected="true"] {
+	background: var(--color-selected-surface);
+}
+
+.slot,
+.folderIcon,
+.fileIcon {
+	display: flex;
+	flex-shrink: 0;
+	align-items: center;
+	justify-content: center;
+	width: 1rem;
+	color: var(--color-muted);
+}
+
+.folderIcon {
+	color: var(--color-accent);
+}
+
+.name {
+	flex: 1;
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+/* A name is coloured by what happened to it. The status is on the row, so a
+   folder's own name follows the aggregate the engine gave it. */
+.row[data-status="added"] .name {
+	color: var(--color-added);
+}
+
+.row[data-status="removed"] .name {
+	color: var(--color-removed);
+}
+
+.row[data-status="modified"] .name,
+.row[data-status="renamed"] .name {
+	color: var(--color-renamed);
+}
+
+.added,
+.removed {
+	flex-shrink: 0;
+	padding-inline: var(--space-1);
+	font-weight: 700;
+	font-variant-numeric: tabular-nums;
+}
+
+.added {
+	color: var(--color-added);
+}
+
+.removed {
+	color: var(--color-removed);
+}
+
+.renamed {
+	flex-shrink: 0;
+	margin-right: var(--space-1);
+	padding-inline: var(--space-1);
+	border-radius: var(--radius-sm);
+	background: var(--color-renamed-surface);
+	color: var(--color-renamed);
+	font-size: 0.625rem;
+	font-weight: 700;
+}

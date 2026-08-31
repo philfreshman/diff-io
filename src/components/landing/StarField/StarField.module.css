@@ -1,0 +1,24 @@
+.starField {
+	position: fixed;
+	inset: 0;
+	/* dvh tracks the visible viewport as mobile browser toolbars collapse, and
+	   keeps stars near the bottom edge from adding scrollable overflow. */
+	height: 100dvh;
+	width: 100%;
+	z-index: var(--z-background);
+	pointer-events: none;
+	opacity: 0;
+	transition: opacity var(--duration-slow) ease-in;
+}
+
+/* Set by the component once it has actually put a frame on the canvas, so the
+   sky never fades up over an empty one. */
+.starField[data-drawn="true"] {
+	opacity: 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.starField {
+		transition: none;
+	}
+}

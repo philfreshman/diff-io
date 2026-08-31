@@ -1,0 +1,239 @@
+/*
+ * Global stylesheet: design tokens, the reset, and document-level styling.
+ * Everything else is colocated in `*.module.css` next to its component.
+ *
+ * Themes switch on `data-theme`, set on <html> by the pre-paint script in
+ * `__root.tsx`, so the tokens are redefined per theme rather than duplicated at
+ * every use site. A component reads `var(--color-foreground)`; it never branches
+ * on the theme itself.
+ */
+
+@font-face {
+	font-family: "Miriam Libre";
+	src:
+		local("Miriam Libre Regular"),
+		url("/fonts/MiriamLibre-Regular.woff") format("woff");
+	font-style: normal;
+	font-weight: 400;
+	font-display: block;
+}
+
+@font-face {
+	font-family: "Miriam Libre";
+	src:
+		local("Miriam Libre Bold"),
+		url("/fonts/MiriamLibre-Bold.woff") format("woff");
+	font-style: normal;
+	font-weight: 700;
+	font-display: block;
+}
+
+:root {
+	color-scheme: light;
+
+	/* --- Neutral ramp -------------------------------------------------- */
+	--neutral-50: #fafafa;
+	--neutral-100: #f5f5f5;
+	--neutral-200: #e5e5e5;
+	--neutral-300: #d4d4d4;
+	--neutral-400: #a3a3a3;
+	--neutral-500: #737373;
+	--neutral-600: #525252;
+	--neutral-700: #404040;
+	--neutral-800: #262626;
+	--neutral-900: #171717;
+	--neutral-950: #0a0a0a;
+
+	/* --- Semantic colour ------------------------------------------------
+	   The only colours components should name. Redefined under
+	   :root[data-theme="dark"] below. */
+	--color-background: #ffffff;
+	--color-foreground: var(--neutral-900);
+	--color-muted: var(--neutral-500);
+	--color-border: var(--neutral-200);
+	--color-surface: var(--neutral-50);
+	--color-surface-hover: rgb(0 0 0 / 0.05);
+	/* A translucent pane over the background — the landing tiles sit on the star
+	   field and need to dim it without hiding it. */
+	--color-surface-veil: rgb(255 255 255 / 0.65);
+	--color-focus-ring: var(--neutral-900);
+	/* The one action a screen asks for — today only the Compare button. */
+	--color-accent: #2563eb;
+	--color-accent-hover: #1d4ed8;
+	--color-accent-foreground: #ffffff;
+	/* Something the user asked for did not happen — a comparison the engine
+	   could not build, a file it could not read. */
+	--color-danger: #b91c1c;
+	/* What happened to a file, in the tree and (from task 12) in the diff. */
+	--color-added: #16a34a;
+	--color-removed: #dc2626;
+	--color-renamed: #d97706;
+	--color-renamed-surface: #fef3c7;
+	/* The row the URL names, in the tree. */
+	--color-selected-surface: #eff6ff;
+
+	/* --- The diff itself -------------------------------------------------
+	   GitHub's diff palette, carried over unchanged: a wash across the row and
+	   a stronger one in its gutter, so a line reads as added or removed at a
+	   glance and its number does too. `--color-added` above is a foreground;
+	   these are surfaces, and the two are not interchangeable. */
+	--color-added-surface: #e6ffec;
+	--color-added-gutter: #cdffd8;
+	--color-added-gutter-border: #bef5cb;
+	--color-removed-surface: #ffeef0;
+	--color-removed-gutter: #ffdce0;
+	--color-removed-gutter-border: #fdaeb7;
+	/* A fold: the lines nothing happened to, stood down out of the way. */
+	--color-fold-surface: #f1f8ff;
+	--color-fold-gutter: #dbedff;
+	--color-fold-gutter-border: #c8e1ff;
+
+	/* The night sky behind the landing page. Light theme has none — a component
+	   reads this token rather than branching on the theme itself. */
+	--cosmic-backdrop: none;
+
+	/* --- Registry accents ----------------------------------------------
+	   Kept as raw channels too, because the tile glow composes them into
+	   rgb(… / alpha) at several opacities. A registry with no accent of its
+	   own falls back to the neutral one. */
+	--registry-default-rgb: 115 115 115;
+	--registry-npm-rgb: 203 56 55;
+	--registry-crates-rgb: 222 132 44;
+	--registry-go-rgb: 0 173 216;
+	--registry-pypi-rgb: 55 118 171;
+	--registry-npm: rgb(var(--registry-npm-rgb));
+	--registry-crates: rgb(var(--registry-crates-rgb));
+	--registry-go: rgb(var(--registry-go-rgb));
+	--registry-pypi: rgb(var(--registry-pypi-rgb));
+
+	/* --- Type ----------------------------------------------------------- */
+	--font-display: "Miriam Libre", sans-serif;
+	--font-sans:
+		ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+	--font-mono:
+		ui-monospace, SFMono-Regular, Menlo, Monaco, "Cascadia Mono", monospace;
+
+	--text-xs: 0.75rem;
+	--text-sm: 0.875rem;
+	--text-base: 1rem;
+	--text-lg: 1.125rem;
+	--text-xl: 1.5rem;
+	--text-2xl: 2.25rem;
+	--text-3xl: 3rem;
+
+	/* --- Space ---------------------------------------------------------- */
+	--space-1: 0.25rem;
+	--space-2: 0.5rem;
+	--space-3: 0.75rem;
+	--space-4: 1rem;
+	--space-6: 1.5rem;
+	--space-8: 2rem;
+	--space-12: 3rem;
+	--space-16: 4rem;
+
+	/* --- Radii ---------------------------------------------------------- */
+	--radius-sm: 0.125rem;
+	--radius-md: 0.2rem;
+	--radius-lg: 0.5rem;
+	--radius-xl: 1rem;
+	--radius-full: 9999px;
+
+	/* --- Motion --------------------------------------------------------- */
+	--duration-fast: 150ms;
+	--duration-slow: 400ms;
+
+	/* --- Layers --------------------------------------------------------- */
+	--z-backdrop: -2;
+	--z-background: -1;
+	--z-toolbar: 10;
+	--z-overlay: 100;
+
+	/* --- Layout --------------------------------------------------------- */
+	--header-height-sm: 5rem;
+	--header-height-md: 8rem;
+	--header-height-lg: calc(var(--header-height-md) + 2.25rem);
+
+	/* --- Breakpoints ----------------------------------------------------
+	   `@media` cannot read custom properties, so these are the single written
+	   record of the three widths; media queries repeat the literals. */
+	--breakpoint-sm: 53rem;
+	--breakpoint-md: 63rem;
+	--breakpoint-lg: 75rem;
+}
+
+:root[data-theme="dark"] {
+	color-scheme: dark;
+
+	--color-background: var(--neutral-950);
+	--color-foreground: var(--neutral-100);
+	--color-muted: var(--neutral-400);
+	--color-border: var(--neutral-800);
+	--color-surface: var(--neutral-900);
+	--color-surface-hover: rgb(255 255 255 / 0.1);
+	--color-surface-veil: rgb(10 10 10 / 0.4);
+	--color-focus-ring: var(--neutral-100);
+	--color-accent: #2563eb;
+	--color-accent-hover: #3b82f6;
+	--color-accent-foreground: #ffffff;
+	--color-danger: #f87171;
+	--color-added: #4ade80;
+	--color-removed: #f87171;
+	--color-renamed: #fbbf24;
+	--color-renamed-surface: rgb(120 53 15 / 0.3);
+	--color-selected-surface: rgb(30 58 138 / 0.2);
+	--color-added-surface: #233329;
+	--color-added-gutter: #1a3a2a;
+	--color-added-gutter-border: #2b4b3b;
+	--color-removed-surface: #442d30;
+	--color-removed-gutter: #61222a;
+	--color-removed-gutter-border: #6e363b;
+	--color-fold-surface: #1e2836;
+	--color-fold-gutter: #263449;
+	--color-fold-gutter-border: #38444d;
+
+	--cosmic-backdrop:
+		radial-gradient(
+			ellipse at 20% 30%,
+			rgb(88 28 135 / 0.3) 0%,
+			transparent 50%
+		),
+		radial-gradient(
+			ellipse at 80% 70%,
+			rgb(30 58 138 / 0.3) 0%,
+			transparent 50%
+		),
+		radial-gradient(ellipse at 50% 50%, rgb(5 5 5) 0%, rgb(0 0 0) 100%);
+}
+
+/* Minimal reset — there is no Tailwind preflight to inherit from. */
+*,
+*::before,
+*::after {
+	box-sizing: border-box;
+}
+
+html {
+	background-color: var(--color-background);
+}
+
+body {
+	margin: 0;
+	/* Deliberately transparent: `html`'s background paints the canvas, below the
+	   fixed star field and nebula. An opaque body would cover both — they sit at
+	   a negative z-index, which is *under* body's own background. */
+	background-color: transparent;
+	color: var(--color-foreground);
+	font-family: var(--font-sans);
+	-webkit-font-smoothing: antialiased;
+}
+
+/*
+ * Reduced motion is honoured per component rather than by a blanket override,
+ * because the largest animation on the page is a canvas loop that no CSS rule
+ * can reach (see StarField).
+ */
+@media (prefers-reduced-motion: reduce) {
+	html {
+		scroll-behavior: auto;
+	}
+}

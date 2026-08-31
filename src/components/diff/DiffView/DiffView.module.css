@@ -1,0 +1,45 @@
+/*
+ * The scroller. Only the rows near the viewport exist in the DOM, so the table
+ * is stretched to the full height of the file and each row is placed at its
+ * own offset — expand-all on a long file is thousands of lines, and a plain
+ * list of them is what made the old renderer bypass React.
+ */
+.viewer {
+	--diff-line-height: 1.5rem;
+
+	position: relative;
+
+	display: flex;
+	flex: 1;
+	min-width: 0;
+	min-height: 0;
+	flex-direction: column;
+	border: 1px solid var(--color-border);
+	border-radius: var(--radius-lg);
+	background: var(--color-background);
+	overflow: hidden;
+}
+
+.scroller {
+	flex: 1;
+	min-height: 0;
+	overflow: auto;
+	padding: var(--space-2) 0;
+	/* The file's scrollbar is drawn over this one — see DiffScrollbar — and two
+	   of them would only compete for the same edge. */
+	scrollbar-width: none;
+}
+
+.scroller::-webkit-scrollbar {
+	display: none;
+}
+
+/* A table laid out by hand: the rows are absolutely positioned, so the usual
+   table algorithm has nothing to do here. */
+.sizer,
+.sizer tbody {
+	display: block;
+	position: relative;
+	width: 100%;
+	border-collapse: collapse;
+}
