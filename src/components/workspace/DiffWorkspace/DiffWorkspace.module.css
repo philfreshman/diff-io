@@ -1,0 +1,48 @@
+/*
+ * The workspace fills the window and nothing else scrolls: the tree and the
+ * diff each scroll inside their own pane, which is what lets the viewer
+ * virtualise — a scroller as tall as its content has no rows off screen.
+ */
+.workspace {
+	display: flex;
+	height: 100dvh;
+	flex-direction: column;
+}
+
+.body {
+	display: flex;
+	flex: 1;
+	min-height: 0;
+	flex-direction: column;
+	gap: var(--space-3);
+	padding: var(--space-4);
+}
+
+.status {
+	display: flex;
+	align-items: center;
+	gap: var(--space-2);
+	margin: 0;
+	color: var(--color-muted);
+}
+
+.error {
+	margin: 0;
+	color: var(--color-danger);
+	font-family: var(--font-mono);
+}
+
+.panels {
+	display: flex;
+	flex: 1;
+	gap: var(--space-4);
+	min-height: 0;
+}
+
+.file {
+	display: flex;
+	flex: 1;
+	min-width: 0;
+	min-height: 0;
+	flex-direction: column;
+}

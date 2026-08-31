@@ -1,0 +1,18 @@
+.spinner {
+	display: inline-flex;
+	animation: spin 800ms linear infinite;
+	color: var(--color-muted);
+}
+
+@keyframes spin {
+	to {
+		transform: rotate(1turn);
+	}
+}
+
+/* Reduced motion still needs the indicator, just not the rotation. */
+@media (prefers-reduced-motion: reduce) {
+	.spinner {
+		animation: none;
+	}
+}

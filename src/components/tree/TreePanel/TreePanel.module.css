@@ -1,0 +1,29 @@
+.panel {
+	position: relative;
+	display: flex;
+	flex-direction: column;
+	gap: var(--space-3);
+	flex: 0 0 auto;
+	min-height: 0;
+	width: var(--tree-panel-width, 320px);
+	padding-right: var(--space-3);
+	border-right: 1px solid var(--color-border);
+}
+
+/* The panel's right edge doubles as the grip; it widens on hover so it can be
+   grabbed without hunting for it. */
+.resizer {
+	position: absolute;
+	top: 0;
+	right: -3px;
+	bottom: 0;
+	width: 6px;
+	cursor: col-resize;
+	touch-action: none;
+}
+
+.resizer:hover,
+.resizer:active {
+	background: var(--color-accent);
+	opacity: 0.35;
+}
