@@ -30,11 +30,19 @@ export function findFile(
 }
 
 /**
+ * The files that actually differ, in tree order — the comparison as it is read
+ * rather than as it is stored: the panel defaults to showing only these, and
+ * the toolbar's arrows step through the same list.
+ */
+export function changedFiles(tree: DiffFileEntry | null): DiffFileEntry[] {
+	return flattenFiles(tree).filter((entry) => entry.status !== "unchanged");
+}
+
+/**
  * How many of a comparison's files actually differ. The panel defaults to
  * showing only those, so a plain total over a shorter list reads as a
  * miscount — `3 files` above two rows.
  */
 export function countChangedFiles(tree: DiffFileEntry | null): number {
-	return flattenFiles(tree).filter((entry) => entry.status !== "unchanged")
-		.length;
+	return changedFiles(tree).length;
 }

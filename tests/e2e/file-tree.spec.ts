@@ -229,6 +229,23 @@ test("Enter opens the focused file", async ({ page }) => {
 	);
 });
 
+test("counts the comparison at the foot of the panel it describes", async ({
+	page,
+}) => {
+	await page.goto(EXPRESS);
+	await ready(page);
+
+	// The count is about the tree, so it stands under the tree rather than over
+	// the whole body.
+	const panel = page.getByTestId("tree-panel");
+	const status = panel.getByTestId("diff-status");
+	await expect(status).toHaveText(/^\d+ files, \d+ changed$/);
+
+	const rows = (await tree(page).boundingBox()) ?? { y: 0, height: 0 };
+	const foot = (await status.boundingBox()) ?? { y: 0, height: 0 };
+	expect(foot.y).toBeGreaterThanOrEqual(rows.y + rows.height);
+});
+
 test("the panel is resizable, within limits, and stays where it was put", async ({
 	page,
 }) => {

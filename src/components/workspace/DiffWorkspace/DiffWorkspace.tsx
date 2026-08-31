@@ -1,11 +1,16 @@
 import { useNavigate } from "@tanstack/react-router";
+import { useMemo, useRef, useState } from "react";
 import { DiffToolbar } from "#/components/diff/DiffToolbar/DiffToolbar.tsx";
+import type { DiffViewHandle } from "#/components/diff/DiffView/DiffView.tsx";
 import { DiffView } from "#/components/diff/DiffView/DiffView.tsx";
 import { useDiffView } from "#/components/diff/useDiffView.ts";
 import { TreePanel } from "#/components/tree/TreePanel/TreePanel.tsx";
 import { Spinner } from "#/components/ui/Spinner/Spinner.tsx";
+import { countDifferences } from "#/lib/diff/changes.ts";
+import { parseUnifiedDiff } from "#/lib/diff/parseUnifiedDiff.ts";
 import { requireAdapter } from "#/lib/registries/index.ts";
-import { countChangedFiles, flattenFiles } from "#/lib/session/tree.ts";
+import { type ShownFile, shownFile } from "#/lib/session/shownFile.ts";
+import { changedFiles, flattenFiles } from "#/lib/session/tree.ts";
 import { buildPath, type DiffSlug } from "#/lib/url/slug.ts";
 import { useDiffSession } from "../useDiffSession.ts";
 import { WorkspaceHeader } from "../WorkspaceHeader/WorkspaceHeader.tsx";
@@ -14,6 +19,10 @@ import styles from "./DiffWorkspace.module.css";
 /**
  * The workspace shell: the header assembles a comparison, the body shows the
  * one the URL already names.
+ *
+ * The tree and the toolbar are the body's frame, not the comparison's — they
+ * stand from the first paint, empty and stood down, so that choosing a package
+ * fills a layout the reader is already looking at rather than replacing one.
  *
  * Opening a file is a URL write like any other navigation, and how much of a
  * file is open lives here rather than in the viewer — the viewer is mounted
@@ -25,8 +34,29 @@ export function DiffWorkspace({ slug }: { slug: DiffSlug }) {
 	const navigate = useNavigate();
 	const session = useDiffSession(slug);
 	const files = flattenFiles(session.tree);
-	const changed = countChangedFiles(session.tree);
-	const viewer = useDiffView(session.key, session.file?.path ?? "");
+	// The files the toolbar's arrows walk: the unchanged ones are what the tree
+	// hides by default, and stepping into one would look like a broken button.
+	const changed = changedFiles(session.tree);
+	const fileIndex = changed.findIndex((entry) => entry.path === slug.file);
+
+	// The file on screen, which is not always the file last asked for — see
+	// `shownFile`. It is state adjusted during render rather than in an effect,
+	// which would show the empty pane for a frame first.
+	const [shown, setShown] = useState<ShownFile | null>(null);
+	const next = shownFile(shown, session.file);
+	if (next?.diff !== shown?.diff) setShown(next);
+
+	const viewer = useDiffView(session.key, shown?.path ?? "");
+	// Parsed here as well as in the viewer so the count stands whatever the file
+	// is doing: folding and split view move differences between rows, but they
+	// do not change how many the file has. It counts what is on screen, so it
+	// changes when the blur clears rather than a moment before it.
+	const differences = useMemo(
+		() => (shown ? countDifferences(parseUnifiedDiff(shown.diff)) : 0),
+		[shown],
+	);
+	const view = useRef<DiffViewHandle>(null);
+
 	// Opening a file is a URL write like any other navigation; the session
 	// follows the address, never the click.
 	function openFile(file: string) {
@@ -36,6 +66,12 @@ export function DiffWorkspace({ slug }: { slug: DiffSlug }) {
 	/** Closing a file is the same write with nothing in the file segment. */
 	function closeFile() {
 		navigate({ to: buildPath(adapter, { ...slug, file: "" }) });
+	}
+
+	/** The file before or after this one, in the order the tree lists them. */
+	function stepFile(direction: 1 | -1) {
+		const next = changed[fileIndex + direction];
+		if (next) openFile(next.path);
 	}
 
 	return (
@@ -52,67 +88,80 @@ export function DiffWorkspace({ slug }: { slug: DiffSlug }) {
 		>
 			<WorkspaceHeader slug={slug} />
 			<main className={styles.body}>
-				<p
-					className={styles.status}
-					data-testid="diff-status"
-					data-state={session.status}
-				>
-					{session.status === "idle" && "Choose a package and two versions."}
-					{session.status === "loading" && (
-						<Spinner label={`Comparing ${slug.package}…`} />
-					)}
-					{session.status === "ready" &&
-						`${files.length} ${files.length === 1 ? "file" : "files"}, ${changed} changed`}
-				</p>
-
 				{session.status === "error" && (
 					<p className={styles.error} role="alert" data-testid="diff-error">
 						{session.error}
 					</p>
 				)}
 
-				{session.status === "ready" && (
-					<div className={styles.panels}>
-						<TreePanel
-							tree={session.tree}
-							selectedPath={slug.file}
-							onOpenFile={openFile}
+				<div className={styles.panels}>
+					<TreePanel
+						tree={session.tree}
+						selectedPath={slug.file}
+						onOpenFile={openFile}
+						footer={
+							/* Empty while there is nothing to say — the element stays,
+							   because what state the comparison is in is read off it. */
+							<p
+								className={styles.status}
+								data-testid="diff-status"
+								data-state={session.status}
+							>
+								{session.status === "loading" && (
+									<Spinner label={`Comparing ${slug.package}…`} />
+								)}
+								{session.status === "ready" &&
+									`${files.length} ${files.length === 1 ? "file" : "files"}, ${changed.length} changed`}
+							</p>
+						}
+					/>
+					<section className={styles.file} data-testid="diff-file">
+						<DiffToolbar
+							path={session.file?.path ?? ""}
+							fileIndex={fileIndex}
+							fileCount={changed.length}
+							onStepFile={stepFile}
+							onClose={closeFile}
+							differences={differences}
+							onStepDifference={(direction) =>
+								view.current?.stepDifference(direction)
+							}
+							expandAll={viewer.view.expandAll}
+							onExpandAllChange={viewer.setExpandAll}
+							split={viewer.split}
+							onSplitChange={viewer.setSplit}
 						/>
-						{session.file && (
-							<section className={styles.file} data-testid="diff-file">
-								<DiffToolbar
-									path={session.file.path}
-									expandAll={viewer.view.expandAll}
-									onExpandAllChange={viewer.setExpandAll}
-									split={viewer.split}
-									onSplitChange={viewer.setSplit}
-								/>
-								{session.file.status === "loading" && (
-									<Spinner label={`Loading ${session.file.path}…`} />
-								)}
-								{session.file.status === "error" && (
-									<p role="alert" data-testid="file-error">
-										{session.file.error}
-									</p>
-								)}
-								{session.file.diff && (
-									// Keyed by path: a new file is a new view, which is what
-									// makes restoring its scroll a plain mount effect.
-									<DiffView
-										file={session.file.diff}
-										key={session.file.path}
-										onClose={closeFile}
-										onReveal={viewer.reveal}
-										onScrolled={viewer.rememberScroll}
-										path={session.file.path}
-										split={viewer.split}
-										view={viewer.view}
-									/>
-								)}
-							</section>
+						{session.status === "idle" && (
+							<p className={styles.empty}>Choose a package and two versions.</p>
 						)}
-					</div>
-				)}
+						{/* Only with nothing to blur: the first file of a comparison
+						    has no predecessor to keep on screen. */}
+						{session.file?.status === "loading" && !shown && (
+							<Spinner label={`Loading ${session.file.path}…`} />
+						)}
+						{session.file?.status === "error" && (
+							<p role="alert" data-testid="file-error">
+								{session.file.error}
+							</p>
+						)}
+						{shown && (
+							// Keyed by path: a new file is a new view, which is what
+							// makes restoring its scroll a plain mount effect.
+							<DiffView
+								file={shown.diff}
+								key={shown.path}
+								onClose={closeFile}
+								onReveal={viewer.reveal}
+								onScrolled={viewer.rememberScroll}
+								path={shown.path}
+								pending={session.file?.status === "loading"}
+								ref={view}
+								split={viewer.split}
+								view={viewer.view}
+							/>
+						)}
+					</section>
+				</div>
 			</main>
 		</div>
 	);

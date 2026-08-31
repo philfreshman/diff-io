@@ -1,10 +1,14 @@
 import { useVirtualizer } from "@tanstack/react-virtual";
-import type { CSSProperties } from "react";
-import { useEffect, useMemo, useRef } from "react";
+import type { CSSProperties, Ref } from "react";
+import { useEffect, useImperativeHandle, useMemo, useRef } from "react";
 import { CollapsedRow } from "#/components/diff/CollapsedRow/CollapsedRow.tsx";
-import { DiffScrollbar } from "#/components/diff/DiffScrollbar/DiffScrollbar.tsx";
 import { DiffRow } from "#/components/diff/DiffRow/DiffRow.tsx";
+import { DiffScrollbar } from "#/components/diff/DiffScrollbar/DiffScrollbar.tsx";
 import { SplitDiffRow } from "#/components/diff/SplitDiffRow/SplitDiffRow.tsx";
+import {
+	differenceRows,
+	stepDifference as nextDifference,
+} from "#/lib/diff/changes.ts";
 import {
 	computeVisibility,
 	type Expander,
@@ -18,6 +22,12 @@ import type { FileView } from "#/lib/diff/viewMemory.ts";
 import type { FileDiff } from "#/lib/worker/protocol.ts";
 import styles from "./DiffView.module.css";
 
+/** What the toolbar can ask of the viewer once it is on screen. */
+export interface DiffViewHandle {
+	/** Scroll to the next difference down (`1`) or up (`-1`). */
+	stepDifference(direction: 1 | -1): void;
+}
+
 export interface DiffViewProps {
 	path: string;
 	file: FileDiff;
@@ -30,6 +40,13 @@ export interface DiffViewProps {
 	onScrolled(scrollTop: number): void;
 	/** Escape: back to the comparison, with no file open. */
 	onClose(): void;
+	/**
+	 * Another file has been asked for and this one is what is still on screen
+	 * until it arrives.
+	 */
+	pending?: boolean;
+	/** How the toolbar's difference arrows reach the scroller. */
+	ref?: Ref<DiffViewHandle>;
 }
 
 /**
@@ -54,6 +71,8 @@ export function DiffView({
 	onReveal,
 	onScrolled,
 	onClose,
+	pending,
+	ref,
 }: DiffViewProps) {
 	const lines = useMemo(() => parseUnifiedDiff(file), [file]);
 	// Decided once for the whole file: per line it would be both slower and
@@ -72,6 +91,11 @@ export function DiffView({
 	// file already on screen.
 	const markers = useMemo(() => changeMarkers(rows), [rows]);
 
+	// The same rows again, as the places the toolbar's arrows stop: folding and
+	// split pairing both move a change to a different row, so where a
+	// difference *is* has to be recomputed alongside them.
+	const stops = useMemo(() => differenceRows(rows), [rows]);
+
 	const scroller = useRef<HTMLDivElement>(null);
 	const virtualizer = useVirtualizer({
 		count: rows.length,
@@ -86,6 +110,30 @@ export function DiffView({
 		// jump.
 		initialOffset: view.scrollTop,
 	});
+
+	// Stepping through the differences is the toolbar's button and the viewer's
+	// scroller at once, so it is exposed rather than lifted: the offsets it
+	// steps by are the virtualiser's, and they exist nowhere else.
+	useImperativeHandle(
+		ref,
+		() => ({
+			stepDifference(direction) {
+				const element = scroller.current;
+				if (!element) return;
+
+				// Where the reader is, as a row: the row at the top of the
+				// viewport, so "next" is the next difference they have not
+				// reached rather than the one already under their eyes.
+				const here =
+					virtualizer.getVirtualItemForOffset(element.scrollTop)?.index ?? 0;
+				const next = nextDifference(stops, here, direction);
+				if (next === undefined) return;
+
+				virtualizer.scrollToIndex(next, { align: "start" });
+			},
+		}),
+		[virtualizer, stops],
+	);
 
 	// The scroll position is the file's, not the viewer's: the virtualiser
 	// starts at it above, and it is handed back on the way out. Keeping it out
@@ -122,6 +170,9 @@ export function DiffView({
 			className={styles.viewer}
 			data-testid="diff-view"
 			data-path={path}
+			// Set rather than styled inline: what it looks like to be waiting is
+			// the stylesheet's business, and the state is readable from the DOM.
+			data-pending={pending ? "" : undefined}
 			// How much of the file is showing: rows, folds included.
 			data-rows={rows.length}
 			// What the file was taken to be written in — the one decision the

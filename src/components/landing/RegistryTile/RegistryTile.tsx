@@ -1,5 +1,5 @@
 import { Link } from "@tanstack/react-router";
-import { ArrowRightIcon } from "#/components/ui/icons.tsx";
+import { ChevronRightIcon } from "#/components/ui/icons.tsx";
 import type { RegistryAdapter } from "#/lib/registries/types.ts";
 import styles from "./RegistryTile.module.css";
 
@@ -21,7 +21,7 @@ export function RegistryTile({ adapter }: { adapter: RegistryAdapter }) {
 			<p className={styles.tagline}>{adapter.tagline}</p>
 			<span className={styles.explore}>
 				Explore
-				<ArrowRightIcon className={styles.arrow} width="16" height="16" />
+				<ChevronRightIcon className={styles.arrow} width="16" height="16" />
 			</span>
 		</Link>
 	);

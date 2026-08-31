@@ -13,10 +13,13 @@
 	font-weight: 700;
 }
 
-/* The reset sits in the input's trailing slot, so it carries no box of its own. */
+/* The reset sits in the input's trailing slot, so it carries no box of its own
+   — and it is sized from the glyph out: the button's own padding was squeezing
+   the cross down to something smaller than the space it sits in. */
 .reset {
-	width: 1.5rem;
-	height: 1.5rem;
+	width: 1.75rem;
+	height: 1.75rem;
+	padding: 0;
 }
 
 .name {
