@@ -5,7 +5,7 @@ import { useDiffView } from "#/components/diff/useDiffView.ts";
 import { TreePanel } from "#/components/tree/TreePanel/TreePanel.tsx";
 import { Spinner } from "#/components/ui/Spinner/Spinner.tsx";
 import { requireAdapter } from "#/lib/registries/index.ts";
-import { flattenFiles } from "#/lib/session/tree.ts";
+import { countChangedFiles, flattenFiles } from "#/lib/session/tree.ts";
 import { buildPath, type DiffSlug } from "#/lib/url/slug.ts";
 import { useDiffSession } from "../useDiffSession.ts";
 import { WorkspaceHeader } from "../WorkspaceHeader/WorkspaceHeader.tsx";
@@ -25,6 +25,7 @@ export function DiffWorkspace({ slug }: { slug: DiffSlug }) {
 	const navigate = useNavigate();
 	const session = useDiffSession(slug);
 	const files = flattenFiles(session.tree);
+	const changed = countChangedFiles(session.tree);
 	const viewer = useDiffView(session.key, session.file?.path ?? "");
 	// Opening a file is a URL write like any other navigation; the session
 	// follows the address, never the click.
@@ -61,7 +62,7 @@ export function DiffWorkspace({ slug }: { slug: DiffSlug }) {
 						<Spinner label={`Comparing ${slug.package}…`} />
 					)}
 					{session.status === "ready" &&
-						`${files.length} ${files.length === 1 ? "file" : "files"}`}
+						`${files.length} ${files.length === 1 ? "file" : "files"}, ${changed} changed`}
 				</p>
 
 				{session.status === "error" && (

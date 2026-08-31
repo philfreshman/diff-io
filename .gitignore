@@ -14,6 +14,9 @@ wasm/diff-wasm/pkg/
 # Test artefacts
 test-results/
 playwright-report/
+# Recaptured by scripts/capture-screenshots.mjs; the reference set it is read
+# against lives in migration/screenshots/.
+screenshots/
 
 # Environment variables
 .env.local

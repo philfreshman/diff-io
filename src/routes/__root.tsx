@@ -6,8 +6,10 @@ import {
 	Scripts,
 } from "@tanstack/react-router";
 import { useState } from "react";
+import { Analytics } from "#/components/Analytics.tsx";
 import { NotFound } from "#/components/NotFound/NotFound.tsx";
 import { ThemeToggle } from "#/components/theme/ThemeToggle/ThemeToggle.tsx";
+import { GA_SCRIPT, GA_SRC } from "#/lib/analytics.ts";
 import { createQueryClient } from "#/lib/query/queryClient.ts";
 import { THEME_SCRIPT } from "#/lib/themeScript.ts";
 import { TREE_WIDTH_SCRIPT } from "#/lib/tree/widthScript.ts";
@@ -93,11 +95,15 @@ function RootDocument() {
 				<script dangerouslySetInnerHTML={{ __html: THEME_SCRIPT }} />
 				{/* biome-ignore lint/security/noDangerouslySetInnerHtml: pre-paint tree width script must be inline */}
 				<script dangerouslySetInnerHTML={{ __html: TREE_WIDTH_SCRIPT }} />
+				<script async src={GA_SRC} />
+				{/* biome-ignore lint/security/noDangerouslySetInnerHtml: gtag.js bootstrap must be inline, ahead of the async library */}
+				<script dangerouslySetInnerHTML={{ __html: GA_SCRIPT }} />
 			</head>
 			<body>
 				<QueryClientProvider client={queryClient}>
 					<ThemeToggle />
 					<Outlet />
+					<Analytics />
 				</QueryClientProvider>
 				<Scripts />
 			</body>

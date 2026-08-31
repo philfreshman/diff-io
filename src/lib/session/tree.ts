@@ -28,3 +28,13 @@ export function findFile(
 
 	return flattenFiles(tree).find((entry) => entry.path === path);
 }
+
+/**
+ * How many of a comparison's files actually differ. The panel defaults to
+ * showing only those, so a plain total over a shorter list reads as a
+ * miscount — `3 files` above two rows.
+ */
+export function countChangedFiles(tree: DiffFileEntry | null): number {
+	return flattenFiles(tree).filter((entry) => entry.status !== "unchanged")
+		.length;
+}
