@@ -209,7 +209,11 @@ test("counts a visit, and each comparison after it", async ({ page }) => {
 	await home.click();
 	await expect(page).toHaveURL("/");
 
-	await expect.poll(async () => (await dataLayer()).length).toBeGreaterThan(2);
+	// The head is reconciled about a second after the click in a production
+	// build, and the view is reported once it is.
+	await expect
+		.poll(async () => (await dataLayer()).length, { timeout: 15_000 })
+		.toBeGreaterThan(2);
 	const [type, name, params] = (await dataLayer())[2] as [
 		string,
 		string,
@@ -249,8 +253,13 @@ for (const route of ROUTES) {
 			// list is the adapter's business, not a rendering fault. The GL
 			// messages are headless Chromium's software renderer narrating the
 			// star field to itself, and say nothing about the page.
+			//
+			// The wasm MIME warning is `vite preview`'s static server, which does
+			// not read the deploy's header rules; the `content-type` for the
+			// module is set in `nitro({ routeRules })` and lands in
+			// `.vercel/output/config.json`, which is where it is checked.
 			if (
-				/Failed to load resource|googletagmanager|WebGL-0x|GL Driver Message/.test(
+				/Failed to load resource|googletagmanager|WebGL-0x|GL Driver Message|instantiateStreaming/.test(
 					text,
 				)
 			) {

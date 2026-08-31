@@ -9,8 +9,15 @@ declare global {
 	}
 }
 
-/** How long a route is given to write its title before the view is reported. */
-const TITLE_GRACE_MS = 300;
+/**
+ * How long a route is given to write its title before the view is reported.
+ *
+ * Measured, not guessed: in a production build the head is reconciled about a
+ * second after the click — and mutates twice before that with the *old* title
+ * still in place — where `vite dev` manages it in tens of milliseconds. A
+ * deadline tuned against dev reports every view under the previous page's name.
+ */
+const TITLE_GRACE_MS = 3_000;
 
 /**
  * The Astro site was a document per URL, so gtag.js counted every comparison on
@@ -69,10 +76,10 @@ export function Analytics() {
 		});
 		const deadline = setTimeout(send, TITLE_GRACE_MS);
 
-		return () => {
-			observer.disconnect();
-			clearTimeout(deadline);
-		};
+		// A navigation that arrives before the title does still happened: report
+		// it on the way out rather than dropping it, since a missing view is
+		// worse than one named after the page it was leaving.
+		return send;
 	}, [href]);
 
 	return null;

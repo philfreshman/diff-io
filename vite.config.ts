@@ -33,6 +33,14 @@ export default defineConfig({
 						"cache-control": "public, max-age=31536000, immutable",
 					},
 				},
+				// `WebAssembly.instantiateStreaming` refuses anything that is not
+				// `application/wasm` and falls back to the slower, buffer-the-whole-
+				// module path — on every cold comparison, with only a console warning
+				// to say so. Static hosts vary on whether they get this right, so it
+				// is stated rather than assumed.
+				"/assets/**.wasm": {
+					headers: { "content-type": "application/wasm" },
+				},
 				// Everything else is server-rendered HTML: never trusted by the
 				// browser, held briefly at the edge, and served stale while it is
 				// revalidated. Same policy the Astro site was deployed under.
