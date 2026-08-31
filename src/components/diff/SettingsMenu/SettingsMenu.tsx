@@ -99,7 +99,10 @@ export function SettingsMenu() {
 											align="start"
 											side="left"
 										>
-											<NavigationMenu.Popup className={styles.popup}>
+											<NavigationMenu.Popup
+												className={styles.popup}
+												data-testid="theme-popup"
+											>
 												<NavigationMenu.Viewport className={styles.viewport} />
 											</NavigationMenu.Popup>
 										</NavigationMenu.Positioner>

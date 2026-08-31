@@ -222,6 +222,52 @@ test("themes the code, and remembers which theme", async ({ page }) => {
 	).toBe("nord");
 });
 
+test("names the theme in force, and ticks it among the rest", async ({
+	page,
+}) => {
+	await open(page, MANIFEST);
+	await openThemes(page);
+
+	await page.getByRole("button", { name: "Nord", exact: true }).click();
+	await openSettings(page);
+
+	// The row says what it is set to without being opened — which is the whole
+	// reason the picker can afford to be behind a fold.
+	await expect(themeFold(page)).toContainText("Nord");
+
+	await themeFold(page).click();
+
+	// And inside, the one in force is the one marked, so the tick and the row
+	// cannot disagree.
+	await expect(page.locator('[data-theme="nord"]')).toHaveAttribute(
+		"aria-pressed",
+		"true",
+	);
+	await expect(page.locator('[data-theme="github-dark"]')).toHaveAttribute(
+		"aria-pressed",
+		"false",
+	);
+});
+
+test("the fold shows every theme it has, rather than clipping them", async ({
+	page,
+}) => {
+	await open(page, MANIFEST);
+	await openThemes(page);
+
+	// The popup is as tall as its list rather than a height it gave itself: a
+	// fold that keeps the last themes behind a scroll of its own reads as a
+	// shorter list than it is.
+	const overflow = await page
+		.getByTestId("theme-popup")
+		.evaluate((node) => node.scrollHeight - node.clientHeight);
+	expect(overflow).toBe(0);
+	await expect(page.getByTestId("theme-option").last()).toHaveAttribute(
+		"data-theme",
+		"windows-95",
+	);
+});
+
 test("every theme it offers is one it can serve", async ({ page }) => {
 	await open(page, MANIFEST);
 	await openThemes(page);
