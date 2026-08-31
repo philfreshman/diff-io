@@ -395,8 +395,8 @@ export function StarField() {
 			// says anything happened. Both axes are inverted — the camera moves away
 			// from the cursor, so the field drifts towards it.
 			pointer.lerp(target, 0.03);
-			camera.position.x = -pointer.x * 1.6 + Math.sin(t / 17) * 0.5;
-			camera.position.y = pointer.y * 1.0 + Math.cos(t / 23) * 0.35;
+			camera.position.x = -pointer.x * 0.5 + Math.sin(t / 17) * 0.5;
+			camera.position.y = pointer.y * 0.3 + Math.cos(t / 23) * 0.35;
 
 			// Forwards is always -z, since nothing rotates the camera.
 			uOffset.value.z += DRIFT_SPEED * dt;

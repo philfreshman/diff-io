@@ -108,7 +108,11 @@ test("nothing to compare, nothing started", async ({ page }) => {
 	await page.goto("/npm/express");
 
 	await expect(status(page)).toHaveAttribute("data-state", "idle");
-	await expect(page.getByRole("tree")).toHaveCount(0);
+	// The panel and the bar are the workspace's frame and stand either way, but
+	// half a package name is not a comparison: nothing has been fetched, so
+	// there are no rows in the tree and nothing said about a count.
+	await expect(page.getByRole("treeitem")).toHaveCount(0);
+	await expect(status(page)).toBeEmpty();
 });
 
 test("extracts a Go module and strips its versioned root", async ({ page }) => {

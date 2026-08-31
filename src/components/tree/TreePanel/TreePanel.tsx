@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { FileTree } from "#/components/tree/FileTree/FileTree.tsx";
 import { TreeFilter } from "#/components/tree/TreeFilter/TreeFilter.tsx";
@@ -22,6 +23,11 @@ export interface TreePanelProps {
 	tree: DiffFileEntry | null;
 	selectedPath: string;
 	onOpenFile(path: string): void;
+	/**
+	 * What the tree amounts to, stated at its foot — the count belongs to the
+	 * list it counts, so it sits under it rather than over the whole body.
+	 */
+	footer?: ReactNode;
 }
 
 /**
@@ -29,7 +35,12 @@ export interface TreePanelProps {
  * — the filter, only-modified, and which folders the user has opened or closed
  * by hand — and hands `visibleRows` the whole of that state at once.
  */
-export function TreePanel({ tree, selectedPath, onOpenFile }: TreePanelProps) {
+export function TreePanel({
+	tree,
+	selectedPath,
+	onOpenFile,
+	footer,
+}: TreePanelProps) {
 	const [filter, setFilter] = useState("");
 	// A stored preference cannot be read during render — the server has no
 	// `localStorage`, and reading it in the first client render is the same
@@ -130,6 +141,7 @@ export function TreePanel({ tree, selectedPath, onOpenFile }: TreePanelProps) {
 				onOpenFile={onOpenFile}
 				onToggleFolder={toggleFolder}
 			/>
+			{footer && <div className={styles.foot}>{footer}</div>}
 			{/* biome-ignore lint/a11y/useSemanticElements: an <hr> cannot be dragged */}
 			<div
 				className={styles.resizer}

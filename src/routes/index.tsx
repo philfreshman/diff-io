@@ -35,7 +35,6 @@ function Home() {
 
 				<footer className={styles.footer}>
 					<p className={styles.footerText}>
-						More registries coming soon.
 						<a
 							className={styles.repoLink}
 							href="https://github.com/philfreshman/diffpack"
