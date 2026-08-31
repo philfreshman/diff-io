@@ -1,8 +1,8 @@
 import { useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
-import { CloseIcon, SearchIcon } from "#/components/ui/icons.tsx";
-import { IconButton } from "#/components/ui/IconButton/IconButton.tsx";
 import { Combobox } from "#/components/ui/Combobox/Combobox.tsx";
+import { IconButton } from "#/components/ui/IconButton/IconButton.tsx";
+import { CloseIcon, SearchIcon } from "#/components/ui/icons.tsx";
 import { Spinner } from "#/components/ui/Spinner/Spinner.tsx";
 import type { RegistryAdapter, SearchResult } from "#/lib/registries/types.ts";
 import {
@@ -78,7 +78,7 @@ export function PackageCombobox({ adapter, selected }: PackageComboboxProps) {
 					className={styles.reset}
 					onClick={reset}
 				>
-					<CloseIcon />
+					<CloseIcon width="18" height="18" />
 				</IconButton>
 			) : state === "searching" ? (
 				<Spinner label="Searching packages" />
