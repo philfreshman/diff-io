@@ -1,6 +1,4 @@
-import { Checkbox } from "@base-ui/react/checkbox";
 import { NavigationMenu } from "@base-ui/react/navigation-menu";
-import { useId } from "react";
 import { useHighlightTheme } from "#/components/diff/useHighlightTheme.ts";
 import {
 	CheckIcon,
@@ -21,9 +19,6 @@ import styles from "./SettingsMenu.module.css";
  */
 export function SettingsMenu() {
 	const highlight = useHighlightTheme();
-	// The box is a button with a checkbox role, not an `<input>`, so the row's
-	// text is tied to it by id rather than by wrapping it in a `<label>`.
-	const whitespace = useId();
 
 	return (
 		<NavigationMenu.Root className={styles.root} orientation="vertical">
@@ -41,26 +36,19 @@ export function SettingsMenu() {
 						<ul className={styles.options}>
 							<li>
 								{/* Stated rather than hidden: the setting is coming, and
-								    saying so is what stops it being asked for again. */}
-								<span className={styles.option}>
-									<Checkbox.Root
-										aria-labelledby={whitespace}
-										className={styles.checkbox}
-										disabled
-									>
-										<Checkbox.Indicator className={styles.indicator}>
-											<CheckIcon width="14" height="14" />
-										</Checkbox.Indicator>
-									</Checkbox.Root>
-									<span id={whitespace}>Ignore whitespaces</span>
-								</span>
+								    saying so is what stops it being asked for again. Once it
+								    is live it says so the way a chosen theme does — with a
+								    tick at the end of its own row. */}
+								<button className={styles.option} disabled type="button">
+									Ignore whitespaces
+								</button>
 							</li>
 
 							<li>
 								{/* Twenty-three themes are a list to scan, not a row of
 								    controls, so they fold in behind their own name. */}
 								<NavigationMenu.Root orientation="vertical">
-									<NavigationMenu.List>
+									<NavigationMenu.List className={styles.options}>
 										<NavigationMenu.Item>
 											<NavigationMenu.Trigger
 												className={styles.option}

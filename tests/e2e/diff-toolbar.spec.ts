@@ -129,9 +129,7 @@ async function openSettings(page: Page) {
 	if (await themeFold(page).count()) await settings(page).click();
 	await expect(themeFold(page)).toHaveCount(0);
 	await settings(page).click();
-	await expect(
-		page.getByRole("checkbox", { name: /whitespace/i }),
-	).toBeVisible();
+	await expect(page.getByRole("button", { name: /whitespace/i })).toBeVisible();
 }
 
 test("the gear opens the settings, whitespace among them, not yet live", async ({
@@ -143,7 +141,7 @@ test("the gear opens the settings, whitespace among them, not yet live", async (
 	// The setting is stated rather than hidden: it is coming, and saying so is
 	// what stops it being asked for again.
 	await expect(
-		page.getByRole("checkbox", { name: "Ignore whitespaces" }),
+		page.getByRole("button", { name: "Ignore whitespaces" }),
 	).toBeDisabled();
 });
 
