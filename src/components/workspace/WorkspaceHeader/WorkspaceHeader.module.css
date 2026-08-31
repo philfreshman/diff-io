@@ -1,5 +1,9 @@
+/* Three columns rather than a row: the empty third mirrors the logo, which is
+   what centres the controls on the window instead of on what is left of it
+   once the logo has taken its share. */
 .header {
-	display: flex;
+	display: grid;
+	grid-template-columns: minmax(auto, 1fr) minmax(0, 64rem) minmax(auto, 1fr);
 	align-items: center;
 	gap: var(--space-8);
 	padding: var(--space-4) var(--space-6);
@@ -8,6 +12,7 @@
 }
 
 .logo {
+	justify-self: start;
 	padding: var(--space-2) var(--space-3);
 	border: 2px solid var(--color-foreground);
 	border-radius: var(--radius-md);
@@ -21,8 +26,6 @@
 .controls {
 	display: flex;
 	min-width: 0;
-	flex: 1;
-	max-width: 64rem;
 	align-items: flex-end;
 	gap: var(--space-4);
 }

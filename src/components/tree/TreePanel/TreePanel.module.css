@@ -10,6 +10,22 @@
 	border-right: 1px solid var(--color-border);
 }
 
+/* Pushed to the bottom of the panel rather than trailing the last row: it is
+   the panel's footing, and a short tree would otherwise leave it floating in
+   the middle of the empty space below. */
+/* Nothing to report is nothing to rule off: a comparison that has not been
+   asked for yet leaves the panel plain. */
+.foot:has(> :empty) {
+	display: none;
+}
+
+.foot {
+	margin-top: auto;
+	padding-top: var(--space-3);
+	border-top: 1px solid var(--color-border);
+	font-size: var(--text-sm);
+}
+
 /* The panel's right edge doubles as the grip; it widens on hover so it can be
    grabbed without hunting for it. */
 .resizer {

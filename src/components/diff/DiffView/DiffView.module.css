@@ -20,6 +20,15 @@
 	overflow: hidden;
 }
 
+/* The file being left, while the next one is fetched: it stays where it is,
+   softened, rather than being swapped for a spinner — a diff that empties out
+   and comes back throws the reader's eye away from the place they were. */
+.viewer[data-pending] {
+	filter: blur(3px);
+	pointer-events: none;
+	transition: filter var(--duration-fast) ease;
+}
+
 .scroller {
 	flex: 1;
 	min-height: 0;

@@ -31,7 +31,9 @@ const RESULTS = [
 
 const input = (page: Page) =>
 	page.getByRole("combobox", { name: "From Version" });
-const options = (page: Page) => page.getByRole("option");
+/* Scoped to the list it belongs to: the toolbar's theme picker is a `<select>`
+   whose options are options too, and it is on screen throughout. */
+const options = (page: Page) => page.getByRole("listbox").getByRole("option");
 
 /** What a screen reader would announce as the current row. */
 async function highlighted(page: Page): Promise<string | null> {
