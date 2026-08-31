@@ -1,26 +1,30 @@
-import { useEffect, useId, useState } from "react";
+import { useEffect, useState } from "react";
 import { useResolvedTheme } from "#/components/theme/useResolvedTheme.ts";
 import { themeStylesheet } from "#/lib/diff/highlightStylesheet.ts";
 import {
-	HIGHLIGHT_THEMES,
 	readHighlightTheme,
 	writeHighlightTheme,
 } from "#/lib/diff/highlightThemes.ts";
-import styles from "./HighlightThemeSelect.module.css";
 
 /** The one `<link>` the picker owns, created the first time it is needed. */
 const LINK_ID = "highlight-theme";
 
+export interface HighlightThemeControls {
+	/** The theme in force, or `null` before the stored choice has been read. */
+	theme: string | null;
+	choose(theme: string): void;
+}
+
 /**
- * Which highlight.js theme the code is coloured with.
+ * Which highlight.js theme the code is coloured with, and the stylesheet that
+ * does the colouring.
  *
  * The stylesheet is a `<link>` rather than inlined text: the browser caches it,
- * and swapping themes is then one attribute write. The picker is deliberately a
- * native `<select>` — twenty-three options is a list to scan, and the platform's
- * own is better at that on every device than anything we would build.
+ * and swapping themes is then one attribute write. Held here rather than in the
+ * control that changes it, because what the code looks like is not the menu's
+ * property — the menu is only where it is chosen.
  */
-export function HighlightThemeSelect() {
-	const id = useId();
+export function useHighlightTheme(): HighlightThemeControls {
 	const pageTheme = useResolvedTheme();
 	// Null until mounted: the stored choice cannot be read on the server, and
 	// guessing at it in the first client render is a hydration mismatch.
@@ -39,34 +43,13 @@ export function HighlightThemeSelect() {
 		if (href) stylesheetLink().href = href;
 	}, [theme]);
 
-	function choose(value: string) {
-		setTheme(value);
-		writeHighlightTheme(value);
-	}
-
-	return (
-		<div className={styles.picker}>
-			<label className={styles.label} htmlFor={id}>
-				Theme:
-			</label>
-			<select
-				className={styles.select}
-				// Before the stored choice is known there is nothing to choose from
-				// yet — an enabled select would offer to change a value it is not
-				// showing.
-				disabled={theme === null}
-				id={id}
-				onChange={(event) => choose(event.target.value)}
-				value={theme ?? ""}
-			>
-				{HIGHLIGHT_THEMES.map(({ value, label }) => (
-					<option key={value} value={value}>
-						{label}
-					</option>
-				))}
-			</select>
-		</div>
-	);
+	return {
+		theme,
+		choose(next: string) {
+			setTheme(next);
+			writeHighlightTheme(next);
+		},
+	};
 }
 
 function stylesheetLink(): HTMLLinkElement {

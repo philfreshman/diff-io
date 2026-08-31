@@ -1,0 +1,146 @@
+/*
+ * The gear and the menu behind it. The trigger is one of the toolbar's icon
+ * buttons by eye — it sits in the same row as them — and everything it opens
+ * borrows the surfaces the rest of the app is built from.
+ */
+.root {
+	display: flex;
+}
+
+.list {
+	display: flex;
+	margin: 0;
+	padding: 0;
+	list-style: none;
+}
+
+.gear {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	padding: var(--space-2);
+	border: 0;
+	border-radius: var(--radius-md);
+	background: transparent;
+	color: currentColor;
+	cursor: pointer;
+	transition: background-color var(--duration-fast) ease;
+}
+
+.gear:hover,
+.gear[data-popup-open] {
+	background-color: var(--color-surface-hover);
+}
+
+.gear:focus-visible {
+	outline: 2px solid var(--color-focus-ring);
+	outline-offset: 2px;
+}
+
+.positioner {
+	z-index: var(--z-overlay);
+}
+
+.popup {
+	max-height: 20rem;
+	overflow-y: auto;
+	border: 1px solid var(--color-border);
+	border-radius: var(--radius-lg);
+	background: var(--color-surface);
+	/* The same lift the combobox's list has: they are the same kind of thing. */
+	box-shadow: 0 8px 24px rgb(0 0 0 / 0.15);
+}
+
+.viewport {
+	position: relative;
+}
+
+.content {
+	padding: var(--space-1);
+}
+
+.options {
+	display: flex;
+	min-width: 12rem;
+	flex-direction: column;
+	margin: 0;
+	padding: 0;
+	list-style: none;
+}
+
+/* One row of the menu, whatever it holds: a switch, a fold, or a theme. */
+.option {
+	display: flex;
+	width: 100%;
+	align-items: center;
+	gap: var(--space-2);
+	padding: var(--space-2) var(--space-3);
+	border: 0;
+	border-radius: var(--radius-md);
+	background: transparent;
+	color: var(--color-foreground);
+	font-family: inherit;
+	font-size: var(--text-sm);
+	text-align: left;
+	cursor: pointer;
+}
+
+.option:hover,
+.option[data-popup-open] {
+	background-color: var(--color-surface-hover);
+}
+
+.option:focus-visible {
+	outline: 2px solid var(--color-focus-ring);
+	outline-offset: -2px;
+}
+
+.option:has(:disabled) {
+	color: var(--color-muted);
+	cursor: default;
+}
+
+.option:has(:disabled):hover {
+	background: transparent;
+}
+
+/* What the row is currently set to, said in the row rather than only inside
+   the fold it opens. */
+.value {
+	margin-left: auto;
+	color: var(--color-muted);
+	font-size: var(--text-xs);
+}
+
+.chosen {
+	margin-left: auto;
+	color: var(--color-accent);
+}
+
+.fold {
+	display: flex;
+	color: var(--color-muted);
+}
+
+.checkbox {
+	display: inline-flex;
+	width: 1rem;
+	height: 1rem;
+	flex: 0 0 auto;
+	align-items: center;
+	justify-content: center;
+	padding: 0;
+	border: 1px solid var(--color-border);
+	border-radius: var(--radius-sm);
+	background: var(--color-background);
+	color: var(--color-background);
+}
+
+.checkbox[data-checked] {
+	border-color: var(--color-accent);
+	background: var(--color-accent);
+}
+
+.indicator {
+	display: flex;
+}

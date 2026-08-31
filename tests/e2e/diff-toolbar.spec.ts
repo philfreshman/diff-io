@@ -117,13 +117,33 @@ test("counts the differences, and scrolls to them one at a time", async ({
 	expect(await top()).toBe(first);
 });
 
-test("says the settings are not there yet rather than opening nothing", async ({
+/** The gear, and what it opens. */
+const settings = (page: Page) =>
+	toolbar(page).getByRole("button", { name: "Settings" });
+
+const themeFold = (page: Page) => page.getByTestId("theme-fold");
+
+async function openSettings(page: Page) {
+	// A menu opened by a click stays open until it is dismissed, and the gear
+	// toggles — so it is shut first, or the click meant to open it closes it.
+	if (await themeFold(page).count()) await settings(page).click();
+	await expect(themeFold(page)).toHaveCount(0);
+	await settings(page).click();
+	await expect(
+		page.getByRole("checkbox", { name: /whitespace/i }),
+	).toBeVisible();
+}
+
+test("the gear opens the settings, whitespace among them, not yet live", async ({
 	page,
 }) => {
 	await open(page, MANIFEST);
+	await openSettings(page);
 
+	// The setting is stated rather than hidden: it is coming, and saying so is
+	// what stops it being asked for again.
 	await expect(
-		toolbar(page).getByRole("button", { name: "Settings" }),
+		page.getByRole("checkbox", { name: "Ignore whitespaces" }),
 	).toBeDisabled();
 });
 
@@ -181,12 +201,20 @@ test("puts the old file beside the new one, and remembers that it was asked", as
 
 const themeLink = (page: Page) => page.locator("link#highlight-theme");
 
+/** The themes, a fold in from the gear. */
+async function openThemes(page: Page) {
+	await openSettings(page);
+	await themeFold(page).click();
+	await expect(
+		page.getByRole("button", { name: "Nord", exact: true }),
+	).toBeVisible();
+}
+
 test("themes the code, and remembers which theme", async ({ page }) => {
 	await open(page, MANIFEST);
+	await openThemes(page);
 
-	await toolbar(page)
-		.getByRole("combobox", { name: "Theme:" })
-		.selectOption({ label: "Nord" });
+	await page.getByRole("button", { name: "Nord", exact: true }).click();
 
 	await expect(themeLink(page)).toHaveAttribute("href", /nord/);
 	// `highlight_theme` is the old app's key, so a returning visitor's theme is
@@ -198,20 +226,20 @@ test("themes the code, and remembers which theme", async ({ page }) => {
 
 test("every theme it offers is one it can serve", async ({ page }) => {
 	await open(page, MANIFEST);
+	await openThemes(page);
 
-	const select = toolbar(page).getByRole("combobox", { name: "Theme:" });
-	const values = await select
-		.locator("option")
-		.evaluateAll((options) =>
-			options.map((option) => (option as HTMLOptionElement).value),
-		);
+	const themes = page.getByTestId("theme-option");
+	const values = await themes.evaluateAll((nodes) =>
+		nodes.map((node) => node.getAttribute("data-theme") ?? ""),
+	);
 	expect(values).toHaveLength(23);
 
 	// The stylesheets are named one by one so the build emits only these — a
-	// theme that fell out of that list would offer an option that colours
+	// theme that fell out of that list would offer a choice that colours
 	// nothing, which is invisible until someone picks it.
 	for (const value of values) {
-		await select.selectOption(value);
+		await openThemes(page);
+		await page.locator(`[data-theme="${value}"]`).click();
 		// The stylesheet is this theme's, not whichever one was showing before:
 		// a theme missing from the list would otherwise leave the previous
 		// theme's `<link>` in place and look like it had worked.

@@ -1,4 +1,4 @@
-import { HighlightThemeSelect } from "#/components/diff/HighlightThemeSelect/HighlightThemeSelect.tsx";
+import { SettingsMenu } from "#/components/diff/SettingsMenu/SettingsMenu.tsx";
 import { IconButton } from "#/components/ui/IconButton/IconButton.tsx";
 import {
 	ArrowDownIcon,
@@ -7,7 +7,6 @@ import {
 	ArrowUpIcon,
 	CloseIcon,
 	FoldIcon,
-	SettingsIcon,
 	SplitViewIcon,
 	UnfoldIcon,
 	UnifiedViewIcon,
@@ -159,17 +158,7 @@ export function DiffToolbar({
 				</IconButton>
 			</div>
 
-			<HighlightThemeSelect />
-
-			{/* The settings it will open do not exist yet, so it says so rather
-			    than pretending to be a control. */}
-			<IconButton
-				aria-label="Settings"
-				title="Settings (not yet available)"
-				disabled
-			>
-				<SettingsIcon width="16" height="16" />
-			</IconButton>
+			<SettingsMenu />
 		</div>
 	);
 }
