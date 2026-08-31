@@ -1,5 +1,9 @@
 import { describe, expect, test } from "bun:test";
-import { findFile, flattenFiles } from "#/lib/session/tree.ts";
+import {
+	countChangedFiles,
+	findFile,
+	flattenFiles,
+} from "#/lib/session/tree.ts";
 import type { DiffFileEntry } from "#/lib/worker/protocol.ts";
 
 const TREE: DiffFileEntry = {
@@ -66,5 +70,46 @@ describe("findFile", () => {
 
 	test("does not find a path this comparison has never had", () => {
 		expect(findFile(TREE, "lib/gone.js")).toBeUndefined();
+	});
+});
+
+describe("countChangedFiles", () => {
+	const tree: DiffFileEntry = {
+		path: "",
+		type: "directory",
+		status: "unchanged",
+		children: [
+			{
+				path: "README.md",
+				type: "file",
+				status: "unchanged",
+			},
+			{
+				path: "package.json",
+				type: "file",
+				status: "modified",
+			},
+			{
+				path: "src",
+				type: "directory",
+				status: "modified",
+				children: [
+					{
+						path: "src/index.js",
+						type: "file",
+						status: "added",
+					},
+				],
+			},
+		],
+	};
+
+	test("counts the files that differ, not the files there are", () => {
+		expect(flattenFiles(tree)).toHaveLength(3);
+		expect(countChangedFiles(tree)).toBe(2);
+	});
+
+	test("a comparison with nothing in it counts nothing", () => {
+		expect(countChangedFiles(null)).toBe(0);
 	});
 });
