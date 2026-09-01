@@ -136,7 +136,7 @@ four jobs:
 | `typecheck, lint, unit tests` | `typecheck`, `lint`, `format`, `test` | bun only |
 | `end-to-end` | `cargo test`, `build:wasm`, `check:wasm-types`, `test:e2e` | bun + Rust + Chromium |
 | `fallow audit (PR gate)` | `fallow audit --gate new-only`, SARIF upload | bun, PRs only |
-| `fallow (full repo)` | full-repo `fallow`, SARIF upload, baseline commit | bun, pushes to `development` only |
+| `fallow (full repo)` | full-repo `fallow`, SARIF upload, baseline artifact | bun, pushes to `development` only |
 
 The first two are split so a broken type or a failing unit test goes red in under a minute rather
 than behind a wasm compile. The first job deliberately never builds the wasm, which makes it the
@@ -150,9 +150,13 @@ uploaded as a `playwright-report` artifact on the run.
 The two `fallow` jobs mirror the pre-commit hook's `--gate new-only` behavior on PRs and add a
 full-repo run on `development` itself, which catches drift on files no PR touched — something
 `--gate new-only` will never do, by design. That job also re-saves the per-analysis baseline files
-(`dead-code-baseline.json`, `health-baseline.json`, `dupes-baseline.json`) committed at the repo
-root, so a local `fallow --baseline` run stays in agreement with CI. These jobs exist to catch a PR
-opened with `--no-verify`, which skips the local hook entirely.
+(`dead-code-baseline.json`, `health-baseline.json`, `dupes-baseline.json`) and publishes them as a
+`fallow-baselines` artifact on the run. It does not commit them back: `development` has required
+status checks, so a push from the job is rejected outright, and a `GITHUB_TOKEN` push would not
+trigger the checks that would clear it either. To refresh the checked-in baselines, download the
+artifact from the latest `development` run (or regenerate them locally with the same three
+`--save-baseline` commands) and open a normal PR. These jobs exist to catch a PR opened with
+`--no-verify`, which skips the local hook entirely.
 
 ## Development Workflow
 
