@@ -34,7 +34,7 @@ jobs:
           bun-version: ${{ env.BUN_VERSION }}
 
       - name: Cache bun install
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: ~/.bun/install/cache
           key: bun-${{ runner.os }}-${{ hashFiles('bun.lock') }}
@@ -66,7 +66,7 @@ jobs:
           bun-version: ${{ env.BUN_VERSION }}
 
       - name: Cache bun install
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: ~/.bun/install/cache
           key: bun-${{ runner.os }}-${{ hashFiles('bun.lock') }}
@@ -107,7 +107,7 @@ jobs:
 
       - name: Upload Playwright report
         if: ${{ !cancelled() }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: playwright-report
           path: |
@@ -139,7 +139,7 @@ jobs:
           bun-version: ${{ env.BUN_VERSION }}
 
       - name: Cache bun install
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: ~/.bun/install/cache
           key: bun-${{ runner.os }}-${{ hashFiles('bun.lock') }}
@@ -171,7 +171,7 @@ jobs:
     if: github.event_name == 'push'
     runs-on: ubuntu-latest
     permissions:
-      contents: write
+      contents: read
       security-events: write
     steps:
       - uses: actions/checkout@v5
@@ -183,7 +183,7 @@ jobs:
           bun-version: ${{ env.BUN_VERSION }}
 
       - name: Cache bun install
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: ~/.bun/install/cache
           key: bun-${{ runner.os }}-${{ hashFiles('bun.lock') }}
@@ -203,22 +203,27 @@ jobs:
         with:
           sarif_file: fallow-results.sarif
 
-      # Committed (not under the gitignored `.fallow/`) so CI and a local
-      # `--baseline` run agree, per the fallow README's CI guidance.
+      # Published as a run artifact rather than committed back to
+      # `development`. `development` has required status checks, and a push
+      # from this job is rejected by them (`GH006: Protected branch update
+      # failed — 2 of 2 required status checks are expected`): the bot's
+      # commit is brand new, so its checks have not run. They also never
+      # would — a push authenticated with `GITHUB_TOKEN` does not trigger
+      # workflows, so the commit could not become mergeable on its own. The
+      # baselines are downloaded from the run and committed through a normal
+      # PR when they need refreshing; see CONTRIBUTING.md.
       - name: Save per-analysis baselines
         run: |
           bunx fallow dead-code --format json --quiet --save-baseline dead-code-baseline.json
           bunx fallow health --format json --quiet --save-baseline health-baseline.json
           bunx fallow dupes --format json --quiet --save-baseline dupes-baseline.json
 
-      - name: Commit updated baselines
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add dead-code-baseline.json health-baseline.json dupes-baseline.json
-          if git diff --cached --quiet; then
-            echo "Baselines unchanged"
-          else
-            git commit -m "chore(fallow): update baselines"
-            git push
-          fi
+      - name: Upload per-analysis baselines
+        uses: actions/upload-artifact@v5
+        with:
+          name: fallow-baselines
+          path: |
+            dead-code-baseline.json
+            health-baseline.json
+            dupes-baseline.json
+          retention-days: 30
