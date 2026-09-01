@@ -198,6 +198,10 @@ test("counts a visit, and each comparison after it", async ({ page }) => {
 	);
 	await page.goto("/npm");
 	await expect(page.getByTestId("workspace")).toBeVisible();
+	// Visible is not hydrated. Until React attaches, the wordmark is a plain
+	// `<a href="/">`: hovering preloads nothing and clicking is a full page
+	// load. `data-ready` is the handshake the comboboxes already publish.
+	await expect(page.locator("[data-ready]").first()).toBeAttached();
 
 	const dataLayer = () =>
 		page.evaluate(() =>
@@ -212,16 +216,30 @@ test("counts a visit, and each comparison after it", async ({ page }) => {
 	// A client-side navigation is a page in its own right here, the way every
 	// URL was its own document on the Astro site.
 	//
-	// The hover is not decoration. `vite dev` hard-navigates a click into a
-	// route whose chunk it has not served yet — a full page load, which would
-	// look like no page_view at all — and the router's `defaultPreload:
-	// "intent"` is what fetches it ahead of the click. A production build needs
-	// no such help.
+	// The hover is not decoration: the router's `defaultPreload: "intent"` is
+	// what fetches the route's chunk, and a click that arrives before it lands
+	// hard-navigates instead. Waiting for the fetch to settle beats guessing at
+	// a delay — a cold CI runner is nothing like a warm laptop.
 	const home = page.getByRole("link", { name: "diffpack" });
 	await home.hover();
-	await page.waitForTimeout(1_000);
+	await page.waitForLoadState("networkidle");
+
+	// A hard navigation starts a new document with a fresh `dataLayer`, so
+	// `[js, config]` alone reads exactly like "the view was never counted".
+	// Stamping the document tells the two apart, and says which one happened.
+	await page.evaluate(() => {
+		(window as Window & { __document?: true }).__document = true;
+	});
+
 	await home.click();
 	await expect(page).toHaveURL("/");
+
+	expect(
+		await page.evaluate(
+			() => (window as Window & { __document?: true }).__document ?? false,
+		),
+		"the click should have been a client-side navigation, not a page load",
+	).toBe(true);
 
 	// The head is reconciled about a second after the click in a production
 	// build, and the view is reported once it is.

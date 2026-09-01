@@ -1,0 +1,117 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [development]
+  push:
+    branches: [development]
+
+# A force-push or a second commit makes the run in flight irrelevant.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  # Matches the version the project is developed against and the pinned
+  # `@types/bun`; CI should not silently move ahead of either.
+  BUN_VERSION: 1.3.14
+
+jobs:
+  # Everything that needs neither a Rust toolchain nor a browser, so a broken
+  # type or a failing unit test is red in well under a minute rather than
+  # behind a wasm compile.
+  checks:
+    name: typecheck, lint, unit tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+
+      - name: Cache bun install
+        uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: bun-${{ runner.os }}-${{ hashFiles('bun.lock') }}
+          restore-keys: bun-${{ runner.os }}-
+
+      - run: bun install --frozen-lockfile
+
+      # The contributor smoke test from CONTRIBUTING.md, asserted rather than
+      # trusted: this job never builds the wasm, so a `typecheck` that needs
+      # `wasm/diff-wasm/pkg/` fails here.
+      - run: bun run typecheck
+
+      - run: bun run lint
+
+      - run: bun run format
+
+      - run: bun run test
+
+  e2e:
+    name: end-to-end
+    runs-on: ubuntu-latest
+    # Downloading and diffing real archives from four registries is slow.
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+
+      - name: Cache bun install
+        uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: bun-${{ runner.os }}-${{ hashFiles('bun.lock') }}
+          restore-keys: bun-${{ runner.os }}-
+
+      - run: bun install --frozen-lockfile
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+
+      # Without this every run recompiles the crate and its dependency tree from
+      # scratch, which is minutes; warm, `build:wasm` is about a second.
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: wasm/diff-wasm
+
+      # The engine's own tests, which no `bun` script runs: they compile for the
+      # host rather than for `wasm32`, so they are neither `bun run test` nor
+      # anything the e2e suite exercises.
+      - name: Rust engine tests
+        run: cargo test
+        working-directory: wasm/diff-wasm
+
+      - run: bun run build:wasm
+
+      # `tsc` reads the checked-in declaration and Vite reads the generated
+      # `pkg/`, so this is the only place the two can be compared. It needs
+      # `build:wasm` above, which is why it cannot live in the pre-commit hook.
+      - run: bun run check:wasm-types
+
+      - name: Install Playwright browsers
+        run: bunx playwright install --with-deps chromium
+
+      # `test:e2e` builds and serves the app itself — see the `webServer` block
+      # in playwright.config.ts. It is a production build, not `vite dev`.
+      - run: bun run test:e2e
+
+      - name: Upload Playwright report
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: |
+            playwright-report/
+            test-results/
+          retention-days: 7
+          if-no-files-found: ignore
