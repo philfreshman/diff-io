@@ -1,26 +1,19 @@
 import { useVirtualizer } from "@tanstack/react-virtual";
 import type { CSSProperties, Ref } from "react";
-import { useEffect, useImperativeHandle, useMemo, useRef } from "react";
+import { useImperativeHandle, useRef } from "react";
 import { CollapsedRow } from "#/components/diff/CollapsedRow/CollapsedRow.tsx";
 import { DiffRow } from "#/components/diff/DiffRow/DiffRow.tsx";
 import { DiffScrollbar } from "#/components/diff/DiffScrollbar/DiffScrollbar.tsx";
 import { SplitDiffRow } from "#/components/diff/SplitDiffRow/SplitDiffRow.tsx";
-import {
-	differenceRows,
-	stepDifference as nextDifference,
-} from "#/lib/diff/changes.ts";
-import {
-	computeVisibility,
-	type Expander,
-} from "#/lib/diff/computeVisibility.ts";
+import { stepDifference as nextDifference } from "#/lib/diff/changes.ts";
+import type { Expander } from "#/lib/diff/computeVisibility.ts";
 import { gutterChars } from "#/lib/diff/gutter.ts";
-import { detectLanguage } from "#/lib/diff/highlight.ts";
-import { pairSplitRows } from "#/lib/diff/pairSplitRows.ts";
-import { parseUnifiedDiff } from "#/lib/diff/parseUnifiedDiff.ts";
-import { changeMarkers } from "#/lib/diff/scrollbar.ts";
 import type { FileView } from "#/lib/diff/viewMemory.ts";
 import type { FileDiff } from "#/lib/worker/protocol.ts";
 import styles from "./DiffView.module.css";
+import { useCloseOnEscape } from "./useCloseOnEscape.ts";
+import { useDiffModel } from "./useDiffModel.ts";
+import { useScrollMemory } from "./useScrollMemory.ts";
 
 /** What the toolbar can ask of the viewer once it is on screen. */
 export interface DiffViewHandle {
@@ -59,9 +52,9 @@ const ROW_HEIGHT = 24;
  * The file, rendered.
  *
  * Everything it draws comes from the pure model — the lines, the folds and the
- * gutter width are all computed before a row exists — so this component is
- * only ever about putting rows on screen and keeping the scroll where the
- * reader left it.
+ * gutter width are all computed before a row exists, in `useDiffModel` — so
+ * this component is only ever about putting rows on screen and keeping the
+ * scroll where the reader left it.
  */
 export function DiffView({
 	path,
@@ -74,27 +67,12 @@ export function DiffView({
 	pending,
 	ref,
 }: DiffViewProps) {
-	const lines = useMemo(() => parseUnifiedDiff(file), [file]);
-	// Decided once for the whole file: per line it would be both slower and
-	// inconsistent, since a line like `}` tells a highlighter nothing.
-	const language = useMemo(() => detectLanguage(path, lines), [path, lines]);
-	const unified = useMemo(() => computeVisibility(lines, view), [lines, view]);
-	// Split view is the same rows in two columns, so the folds survive it as
-	// full-width rows rather than being paired against anything.
-	const rows = useMemo(
-		() => (split ? pairSplitRows(unified) : unified),
-		[split, unified],
+	const { lines, language, rows, markers, stops } = useDiffModel(
+		path,
+		file,
+		view,
+		split,
 	);
-
-	// From the rows rather than from the DOM: the list is virtualised, so
-	// markers measured off rendered rows would only ever cover the part of the
-	// file already on screen.
-	const markers = useMemo(() => changeMarkers(rows), [rows]);
-
-	// The same rows again, as the places the toolbar's arrows stop: folding and
-	// split pairing both move a change to a different row, so where a
-	// difference *is* has to be recomputed alongside them.
-	const stops = useMemo(() => differenceRows(rows), [rows]);
 
 	const scroller = useRef<HTMLDivElement>(null);
 	const virtualizer = useVirtualizer({
@@ -136,34 +114,9 @@ export function DiffView({
 	);
 
 	// The scroll position is the file's, not the viewer's: the virtualiser
-	// starts at it above, and it is handed back on the way out. Keeping it out
-	// of render is what stops a scroll costing a re-render of the whole list —
-	// the component is mounted per path, so this runs once per file.
-	const remember = useRef(onScrolled);
-	remember.current = onScrolled;
-	// Followed in a ref rather than read off the element on the way out: by the
-	// time an unmount cleanup runs, the scroller is off the document and a
-	// detached element reports a scroll position of zero.
-	const at = useRef(view.scrollTop);
-	useEffect(() => () => remember.current(at.current), []);
-
-	// Escape closes the file. It is read from the document rather than from the
-	// viewer because the viewer is not what has focus while a file is being
-	// read — but a field's Escape is the field's own (it closes a combobox's
-	// list), so one typed into is left alone.
-	const close = useRef(onClose);
-	close.current = onClose;
-	useEffect(() => {
-		function onKeyDown(event: KeyboardEvent) {
-			if (event.key !== "Escape" || isField(event.target)) return;
-			event.preventDefault();
-			close.current();
-		}
-
-		document.addEventListener("keydown", onKeyDown);
-
-		return () => document.removeEventListener("keydown", onKeyDown);
-	}, []);
+	// starts at it above, and it is handed back on the way out.
+	const at = useScrollMemory(view.scrollTop, onScrolled);
+	useCloseOnEscape(onClose);
 
 	return (
 		<div
@@ -243,14 +196,5 @@ export function DiffView({
 			</div>
 			<DiffScrollbar markers={markers} scroller={scroller} />
 		</div>
-	);
-}
-
-function isField(target: EventTarget | null): boolean {
-	if (!(target instanceof HTMLElement)) return false;
-
-	return (
-		target.isContentEditable ||
-		["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName)
 	);
 }

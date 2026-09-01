@@ -1,3 +1,4 @@
+import { useRef, useState } from "react";
 import {
 	ChevronDownIcon,
 	ChevronRightIcon,
@@ -5,7 +6,7 @@ import {
 	FolderIcon,
 	FolderOpenIcon,
 } from "#/components/ui/icons.tsx";
-import { useRef, useState } from "react";
+import { treeCommand } from "#/lib/tree/keymap.ts";
 import type { TreeRow } from "#/lib/tree/visibility.ts";
 import styles from "./FileTree.module.css";
 
@@ -26,6 +27,10 @@ function nameOf(path: string): string {
  * The file tree, as a real `role="tree"`: rows carry their own depth and
  * expanded state, and the flat row list they come from is what the keyboard
  * walks.
+ *
+ * Which row a key lands on is `lib/tree/keymap.ts`'s answer, not this
+ * component's — everything left here is the part that needs a DOM: moving
+ * focus, and telling the workspace what was asked for.
  */
 export function FileTree({
 	rows,
@@ -48,9 +53,7 @@ export function FileTree({
 	const activeIndex = index >= 0 ? index : Math.max(selectedIndex, 0);
 	const activePath = rows[activeIndex]?.entry.path ?? "";
 
-	function focusRow(next: number) {
-		const row = rows[Math.min(Math.max(next, 0), rows.length - 1)];
-		if (!row) return;
+	function focusRow(row: TreeRow) {
 		setFocusedPath(row.entry.path);
 		const element = elements.current.get(row.entry.path);
 		element?.focus({ preventScroll: true });
@@ -64,51 +67,14 @@ export function FileTree({
 	}
 
 	function handleKeyDown(event: React.KeyboardEvent) {
-		const row = rows[activeIndex];
-		if (!row) return;
+		const command = treeCommand(event.key, rows, activeIndex);
+		const row = command && rows[command.index];
+		// A key the tree does not answer to is the page's; it is not swallowed.
+		if (!command || !row) return;
 
-		switch (event.key) {
-			case "ArrowDown":
-				focusRow(activeIndex + 1);
-				break;
-			case "ArrowUp":
-				focusRow(activeIndex - 1);
-				break;
-			case "Home":
-				focusRow(0);
-				break;
-			case "End":
-				focusRow(rows.length - 1);
-				break;
-			case "Enter":
-			case " ":
-				activate(row);
-				break;
-			case "ArrowRight":
-				// Open what is shut; on what is already open, step inside it.
-				if (row.hasChildren && !row.expanded) {
-					onToggleFolder(row.entry.path, true);
-				} else if ((rows[activeIndex + 1]?.depth ?? -1) > row.depth) {
-					focusRow(activeIndex + 1);
-				}
-				break;
-			case "ArrowLeft": {
-				// Shut what is open; on a leaf, go up to the folder holding it.
-				if (row.hasChildren && row.expanded) {
-					onToggleFolder(row.entry.path, false);
-					break;
-				}
-				for (let i = activeIndex - 1; i >= 0; i -= 1) {
-					if ((rows[i]?.depth ?? 0) < row.depth) {
-						focusRow(i);
-						break;
-					}
-				}
-				break;
-			}
-			default:
-				return;
-		}
+		if (command.kind === "focus") focusRow(row);
+		else if (command.kind === "activate") activate(row);
+		else onToggleFolder(row.entry.path, command.expanded);
 
 		event.preventDefault();
 	}
@@ -120,79 +86,132 @@ export function FileTree({
 			aria-label="Changed files"
 			onKeyDown={handleKeyDown}
 		>
-			{rows.map((row) => {
-				const { entry, expanded, hasChildren } = row;
-				const folder = entry.type === "directory";
-
-				return (
-					// biome-ignore lint/a11y/useKeyWithClickEvents: the tree owns the keyboard, per the ARIA practices guide
-					<div
-						key={entry.path}
-						role="treeitem"
-						className={styles.row}
-						ref={(element) => {
-							if (element) elements.current.set(entry.path, element);
-							else elements.current.delete(entry.path);
-						}}
-						tabIndex={entry.path === activePath ? 0 : -1}
-						onFocus={() => setFocusedPath(entry.path)}
-						style={{ paddingLeft: `${row.depth * 18 + 4}px` }}
-						aria-level={row.depth + 1}
-						aria-expanded={hasChildren ? expanded : undefined}
-						aria-selected={entry.path === selectedPath}
-						data-path={entry.path}
-						data-type={entry.type}
-						data-status={entry.status}
-						title={
-							entry.status === "renamed" && entry.oldPath
-								? `Renamed from ${entry.oldPath}`
-								: entry.path
-						}
-						onClick={() => activate(row)}
-					>
-						<span className={styles.slot}>
-							{hasChildren ? (
-								<span data-testid="chevron" data-expanded={expanded}>
-									{expanded ? <ChevronDownIcon /> : <ChevronRightIcon />}
-								</span>
-							) : null}
-						</span>
-						<span
-							className={folder ? styles.folderIcon : styles.fileIcon}
-							data-testid="icon"
-							data-icon={
-								folder ? (expanded ? "folder-open" : "folder") : "file"
-							}
-						>
-							{folder ? (
-								expanded ? (
-									<FolderOpenIcon />
-								) : (
-									<FolderIcon />
-								)
-							) : (
-								<FileIcon />
-							)}
-						</span>
-						<span className={styles.name} data-testid="name">
-							{nameOf(entry.path)}
-						</span>
-						{entry.status === "renamed" && (
-							<span className={styles.renamed}>RENAMED</span>
-						)}
-						{entry.added ? (
-							<span className={styles.added} data-testid="added">
-								+{entry.added}
-							</span>
-						) : null}
-						{entry.removed ? (
-							<span className={styles.removed} data-testid="removed">
-								-{entry.removed}
-							</span>
-						) : null}
-					</div>
-				);
-			})}
+			{rows.map((row) => (
+				<FileTreeRow
+					active={row.entry.path === activePath}
+					key={row.entry.path}
+					onActivate={activate}
+					onFocus={setFocusedPath}
+					register={elements.current}
+					row={row}
+					selected={row.entry.path === selectedPath}
+				/>
+			))}
 		</div>
+	);
+}
+
+interface FileTreeRowProps {
+	row: TreeRow;
+	/** Whether this is the tree's one tab stop. */
+	active: boolean;
+	/** Whether this is the file the URL names. */
+	selected: boolean;
+	onActivate(row: TreeRow): void;
+	onFocus(path: string): void;
+	/** Where the rows put themselves so the keyboard can focus them. */
+	register: Map<string, HTMLElement>;
+}
+
+/** One row: a name, what happened to it, and how far in it sits. */
+function FileTreeRow({
+	row,
+	active,
+	selected,
+	onActivate,
+	onFocus,
+	register,
+}: FileTreeRowProps) {
+	const { entry, expanded, hasChildren } = row;
+
+	return (
+		// biome-ignore lint/a11y/useKeyWithClickEvents: the tree owns the keyboard, per the ARIA practices guide
+		<div
+			role="treeitem"
+			className={styles.row}
+			ref={(element) => {
+				if (element) register.set(entry.path, element);
+				else register.delete(entry.path);
+			}}
+			tabIndex={active ? 0 : -1}
+			onFocus={() => onFocus(entry.path)}
+			style={{ paddingLeft: `${row.depth * 18 + 4}px` }}
+			aria-level={row.depth + 1}
+			aria-expanded={hasChildren ? expanded : undefined}
+			aria-selected={selected}
+			data-path={entry.path}
+			data-type={entry.type}
+			data-status={entry.status}
+			title={
+				entry.status === "renamed" && entry.oldPath
+					? `Renamed from ${entry.oldPath}`
+					: entry.path
+			}
+			onClick={() => onActivate(row)}
+		>
+			<RowChevron expanded={expanded} hasChildren={hasChildren} />
+			<RowIcon expanded={expanded} folder={entry.type === "directory"} />
+			<span className={styles.name} data-testid="name">
+				{nameOf(entry.path)}
+			</span>
+			{entry.status === "renamed" && (
+				<span className={styles.renamed}>RENAMED</span>
+			)}
+			{entry.added ? (
+				<span className={styles.added} data-testid="added">
+					+{entry.added}
+				</span>
+			) : null}
+			{entry.removed ? (
+				<span className={styles.removed} data-testid="removed">
+					-{entry.removed}
+				</span>
+			) : null}
+		</div>
+	);
+}
+
+/** The twisty. A file has nothing to open, so it holds the space instead. */
+function RowChevron({
+	expanded,
+	hasChildren,
+}: {
+	expanded: boolean;
+	hasChildren: boolean;
+}) {
+	return (
+		<span className={styles.slot}>
+			{hasChildren ? (
+				<span data-testid="chevron" data-expanded={expanded}>
+					{expanded ? <ChevronDownIcon /> : <ChevronRightIcon />}
+				</span>
+			) : null}
+		</span>
+	);
+}
+
+/**
+ * Which of the three glyphs a row shows. The name is chosen once and both the
+ * icon and `data-icon` follow from it, so what the row says it is drawing and
+ * what it draws cannot come apart.
+ */
+const GLYPHS = {
+	file: FileIcon,
+	folder: FolderIcon,
+	"folder-open": FolderOpenIcon,
+};
+
+function RowIcon({ expanded, folder }: { expanded: boolean; folder: boolean }) {
+	const name = folder ? (expanded ? "folder-open" : "folder") : "file";
+	const Glyph = GLYPHS[name];
+
+	return (
+		<span
+			className={folder ? styles.folderIcon : styles.fileIcon}
+			data-testid="icon"
+			data-icon={name}
+		>
+			<Glyph />
+		</span>
 	);
 }

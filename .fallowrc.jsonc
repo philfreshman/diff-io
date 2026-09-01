@@ -35,6 +35,43 @@
 		// chosen); this ceiling is set out of reach so it cannot block.
 		// Revisit only if Playwright V8 coverage gets wired for other reasons.
 		"maxCrap": 1000000,
+
+		// Decision 7 on #111, and #118's first task. `scripts/` is dev-only
+		// tooling — `capture-screenshots.mjs` and `check-wasm-types.mjs` are run
+		// by hand and by CI, and neither is reachable from the app's import
+		// graph, so nothing in them can ship. It is stated as intent rather than
+		// as a fix: both of the findings it was written for breached on CRAP
+		// alone and dropped out when `maxCrap` above was neutralized, so it
+		// suppresses nothing today. Note this also takes `scripts/` out of the
+		// health *score*, which `thresholdOverrides` below deliberately does not.
+		"ignore": ["scripts/**"],
+
+		// Decision 7 on #111: exceptions are per-function numeric ceilings with a
+		// reason, never a wider `maxCyclomatic` / `maxCognitive`. A ceiling is set
+		// at the function's measured value, so the exception stays a contract —
+		// anything added to one of these has to be argued for again rather than
+		// sliding under a bar that was left loose.
+		"thresholdOverrides": [
+			{
+				"files": ["src/components/ui/Combobox/Combobox.tsx"],
+				"functions": ["Combobox"],
+				"maxCognitive": 19,
+				// 19 breaks down as 12 points of fallow's prop-count penalty (16
+				// props), 4 for its four hooks, and 3 for branching — so a body
+				// with no branching in it at all would still score 16, and no
+				// refactor of the body can reach the default 15. Only the prop
+				// count can, and the prop count is the component: this is the one
+				// combobox behind package search and both version selectors, which
+				// were three hand-rolled copies with three sets of bugs before it,
+				// and each prop is a difference one of those three call sites
+				// actually needs. Splitting it back up, or bundling the props into
+				// an options object to hide them from the count, would both trade a
+				// real property of the code for a number. The nested-ternary filter
+				// that was the one genuinely hard part of the body has been lifted
+				// out to `resolveFilter`; what is left is the prop list.
+				"reason": "16 props on the shared combobox contribute 12 of its 19 cognitive points via fallow's prop-count penalty; branching accounts for 3, so no refactor of the body can reach the default ceiling. The props are the point — one component replaces three hand-rolled copies, and every prop is a difference one of the three call sites needs."
+			}
+		],
 	},
 
 	"rules": {
