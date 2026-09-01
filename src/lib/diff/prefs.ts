@@ -29,3 +29,29 @@ export function writeSplitView(split: boolean): void {
 		// Not persisted; the viewer still shows what was asked for this session.
 	}
 }
+
+export const IGNORE_WHITESPACE_KEY = "ignore-whitespace-preference";
+
+/**
+ * Whitespace-exact unless the visitor asked otherwise. Same literal `"true"`
+ * as split view, so the two settings read and write alike.
+ */
+export function parseIgnoreWhitespace(raw: string | null): boolean {
+	return raw === "true";
+}
+
+export function readIgnoreWhitespace(): boolean {
+	try {
+		return parseIgnoreWhitespace(localStorage.getItem(IGNORE_WHITESPACE_KEY));
+	} catch {
+		return false;
+	}
+}
+
+export function writeIgnoreWhitespace(ignore: boolean): void {
+	try {
+		localStorage.setItem(IGNORE_WHITESPACE_KEY, String(ignore));
+	} catch {
+		// Not persisted; the diff still reads the way it was asked to this session.
+	}
+}

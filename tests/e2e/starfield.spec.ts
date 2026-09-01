@@ -1,4 +1,5 @@
 import { expect, type Page, test } from "@playwright/test";
+import { THEME_STORAGE_KEY } from "#/lib/theme.ts";
 
 /**
  * The sky is a WebGL canvas, so there is nothing to read back out of it: its
@@ -88,7 +89,10 @@ test("keeps the sky to the landing page", async ({ page }) => {
 test("draws no sky in the light theme, and brings it back with the toggle", async ({
 	page,
 }) => {
-	await page.addInitScript(() => localStorage.setItem("theme", "light"));
+	await page.addInitScript(
+		(key) => localStorage.setItem(key, "light"),
+		THEME_STORAGE_KEY,
+	);
 	await page.goto("/");
 
 	await expect(page.getByTestId("star-field")).toHaveCount(0);

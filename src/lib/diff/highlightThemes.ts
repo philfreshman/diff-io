@@ -91,7 +91,7 @@ export const HIGHLIGHT_THEMES: readonly HighlightTheme[] = [
  * options — so a light-mode visitor who had never chosen saw an empty select.
  * `base16/github` is the listed light GitHub theme, and is the fix.
  */
-export function defaultHighlightTheme(theme: ResolvedTheme): string {
+function defaultHighlightTheme(theme: ResolvedTheme): string {
 	return theme === "dark" ? "github-dark" : "base16/github";
 }
 

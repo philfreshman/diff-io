@@ -10,12 +10,12 @@ export const PURPLE: [number, number, number] = [88 / 255, 28 / 255, 135 / 255];
 /** rgb(30 58 138) — the blue ellipse at 80% 70%. */
 export const BLUE: [number, number, number] = [30 / 255, 58 / 255, 138 / 255];
 /** The base ellipse runs rgb(5 5 5) at the centre to pure black at the corners. */
-export const CORE_GREY = 5 / 255;
+const CORE_GREY = 5 / 255;
 
 /** One round trip of `cosmicShift` is 20s out and 20s back (`alternate`). */
-export const HUE_PERIOD_S = 40;
+const HUE_PERIOD_S = 40;
 /** `filter: hue-rotate(30deg)` at the end of the keyframe. */
-export const HUE_SWING_RAD = (30 * Math.PI) / 180;
+const HUE_SWING_RAD = (30 * Math.PI) / 180;
 
 /**
  * `hueRotate`, `cssEllipse` and `cosmicBackdrop(p, res, hue)`, where `p` is a

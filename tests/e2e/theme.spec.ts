@@ -1,4 +1,5 @@
 import { expect, type Page, test } from "@playwright/test";
+import { THEME_STORAGE_KEY } from "#/lib/theme.ts";
 
 /**
  * Captures the theme as it stood at the browser's first paint. The first
@@ -24,9 +25,12 @@ async function firstPaintTheme(page: Page) {
 }
 
 async function storeSelection(page: Page, selection: string) {
-	await page.addInitScript((value) => {
-		localStorage.setItem("theme", value);
-	}, selection);
+	await page.addInitScript(
+		({ key, value }) => {
+			localStorage.setItem(key, value);
+		},
+		{ key: THEME_STORAGE_KEY, value: selection },
+	);
 }
 
 test("a first-time visitor gets the dark theme before anything is painted", async ({
@@ -80,7 +84,8 @@ test("the toggle cycles the selection and remembers it", async ({ page }) => {
 	// The toggle enables itself once mounted; clicking before that does nothing.
 	await expect(toggle).toBeEnabled();
 	const html = page.locator("html");
-	const stored = () => page.evaluate(() => localStorage.getItem("theme"));
+	const stored = () =>
+		page.evaluate((key) => localStorage.getItem(key), THEME_STORAGE_KEY);
 
 	await expect(html).toHaveAttribute("data-theme-selection", "dark");
 

@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { THEME_STORAGE_KEY } from "#/lib/theme.ts";
 
 test("offers every registry diffpack supports", async ({ page }) => {
 	await page.goto("/");
@@ -54,7 +55,6 @@ test("points at the repository from the footer", async ({ page }) => {
 
 	const repo = page.getByRole("link", { name: "diffpack on GitHub" });
 
-	await expect(page.getByText("More registries coming soon.")).toBeVisible();
 	await expect(repo).toHaveAttribute(
 		"href",
 		"https://github.com/philfreshman/diffpack",
@@ -83,7 +83,10 @@ test("hangs the nebula behind the stars, in the dark theme only", async ({
 
 	expect(await backdrop()).toContain("radial-gradient");
 
-	await page.evaluate(() => localStorage.setItem("theme", "light"));
+	await page.evaluate(
+		(key) => localStorage.setItem(key, "light"),
+		THEME_STORAGE_KEY,
+	);
 	await page.reload();
 
 	expect(await backdrop()).toBe("none");

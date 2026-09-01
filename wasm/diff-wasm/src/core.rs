@@ -1,13 +1,36 @@
 use std::collections::hash_map::DefaultHasher;
 use std::collections::{HashMap, HashSet};
 use std::hash::{Hash, Hasher};
-use similar::{ChangeTag, TextDiff};
+use similar::{ChangeTag, TextDiff, WhitespaceMode};
 use crate::types::{DiffFileEntry, DiffStatus, FileMapEntry, FileType};
 
-pub fn get_diff_content(filename: &str, from_content: &str, to_content: &str) -> String {
-    let from_lines: Vec<&str> = from_content.split('\n').collect();
-    let to_lines: Vec<&str> = to_content.split('\n').collect();
-    let diff = TextDiff::from_slices(&from_lines, &to_lines);
+/// `Exact` is Git's default; `IgnoreAll` is its `-w` — every space, tab and
+/// line-ending character disregarded. There is no third choice on offer,
+/// because `-b` still reads `x=1` and `x = 1` as different lines, which is the
+/// very change a reformatted codebase is made of.
+pub fn whitespace_mode(ignore_whitespace: bool) -> WhitespaceMode {
+    if ignore_whitespace {
+        WhitespaceMode::IgnoreAll
+    } else {
+        WhitespaceMode::Exact
+    }
+}
+
+/// Always `diff_lines`, in both modes: `whitespace_mode` reaches no other
+/// constructor, and a file must not change how many lines it has because the
+/// setting was flipped. It is also what `count_diff` has always used, so the
+/// viewer and the tree now count the same lines — splitting on `\n` gave the
+/// viewer one phantom blank line at the end of every file that the tree never
+/// saw.
+pub fn get_diff_content(
+    filename: &str,
+    from_content: &str,
+    to_content: &str,
+    ignore_whitespace: bool,
+) -> String {
+    let diff = TextDiff::configure()
+        .whitespace_mode(whitespace_mode(ignore_whitespace))
+        .diff_lines(from_content, to_content);
     let mut result = format!("--- from/{}\n+++ to/{}", filename, filename);
     for change in diff.iter_all_changes() {
         let sign = match change.tag() {
@@ -18,7 +41,10 @@ pub fn get_diff_content(filename: &str, from_content: &str, to_content: &str) ->
         result.push('\n');
         result.push_str(sign);
         result.push(' ');
-        result.push_str(change.value());
+        // Only the `\n`: a `\r` belongs to the line, and reaches the parser
+        // exactly as it did when the lines were split by hand.
+        let value = change.value();
+        result.push_str(value.strip_suffix('\n').unwrap_or(value));
     }
     result
 }
@@ -31,10 +57,11 @@ pub struct DiffTreeBuilder {
     from_dirs: HashSet<String>,
     to_dirs: HashSet<String>,
     similarity_threshold: f64,
+    ignore_whitespace: bool,
 }
 
 impl DiffTreeBuilder {
-    pub fn new(similarity_threshold: f64) -> Self {
+    pub fn new(similarity_threshold: f64, ignore_whitespace: bool) -> Self {
         Self {
             from_files: HashMap::new(),
             to_files: HashMap::new(),
@@ -43,6 +70,7 @@ impl DiffTreeBuilder {
             from_dirs: HashSet::new(),
             to_dirs: HashSet::new(),
             similarity_threshold: similarity_threshold.max(0.0).min(1.0),
+            ignore_whitespace,
         }
     }
 
@@ -434,8 +462,18 @@ impl DiffTreeBuilder {
                             node.removed = Some(0);
                             (0, 0)
                         } else {
-                            node.status = DiffStatus::Modified;
+                            // The byte-identical fast path above stands in both
+                            // modes and skips a diff for most of a version bump.
+                            // Past it, a file the mode finds nothing in is
+                            // unchanged — that is what drops a reformat out of
+                            // the changed files, the tree's default view and the
+                            // toolbar's arrows.
                             let (added, removed) = self.count_diff(from, to);
+                            node.status = if (added, removed) == (0, 0) {
+                                DiffStatus::Unchanged
+                            } else {
+                                DiffStatus::Modified
+                            };
                             node.added = Some(added);
                             node.removed = Some(removed);
                             (added, removed)
@@ -504,8 +542,12 @@ impl DiffTreeBuilder {
         }
     }
 
+    /// The tree's `+`/`−`, counted the way the file view renders them — or the
+    /// two would contradict each other on the same file.
     fn count_diff(&self, from: &str, to: &str) -> (u32, u32) {
-        let diff = TextDiff::from_lines(from, to);
+        let diff = TextDiff::configure()
+            .whitespace_mode(whitespace_mode(self.ignore_whitespace))
+            .diff_lines(from, to);
 
         let mut added = 0;
         let mut removed = 0;
@@ -570,9 +612,90 @@ pub fn build_diff_tree(
     from_files: HashMap<String, FileMapEntry>,
     to_files: HashMap<String, FileMapEntry>,
     similarity_threshold: f64,
+    ignore_whitespace: bool,
 ) -> DiffFileEntry {
-    let mut builder = DiffTreeBuilder::new(similarity_threshold);
+    let mut builder = DiffTreeBuilder::new(similarity_threshold, ignore_whitespace);
     builder.set_from_files(from_files);
     builder.set_to_files(to_files);
     builder.build_tree()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// A reformat — tab-indent to four spaces, and spaces around the `=` —
+    /// with nothing else touched.
+    const FROM: &str = "fn main() {\n\tlet x=1;\n}\n";
+    const TO: &str = "fn main() {\n    let x = 1;\n}\n";
+
+    fn file(content: &str) -> FileMapEntry {
+        FileMapEntry {
+            file_type: FileType::File,
+            content: content.to_string(),
+        }
+    }
+
+    fn one_file(content: &str) -> HashMap<String, FileMapEntry> {
+        HashMap::from([("a.rs".to_string(), file(content))])
+    }
+
+    #[test]
+    fn renders_a_reformatted_line_as_a_change_when_exact() {
+        assert_eq!(
+            get_diff_content("a.rs", FROM, TO, false),
+            "--- from/a.rs\n+++ to/a.rs\n  fn main() {\n- \tlet x=1;\n+     let x = 1;\n  }"
+        );
+    }
+
+    #[test]
+    fn folds_a_reformatted_line_into_context_when_ignoring_whitespace() {
+        // The new file's text is what a whitespace-equal line shows, which is
+        // what Git does and what the reader is reading towards.
+        assert_eq!(
+            get_diff_content("a.rs", FROM, TO, true),
+            "--- from/a.rs\n+++ to/a.rs\n  fn main() {\n      let x = 1;\n  }"
+        );
+    }
+
+    #[test]
+    fn keeps_a_real_change_while_ignoring_the_reformat_around_it() {
+        let to = "fn main() {\n    let x = 1;\n    println!(\"{}\", x);\n}\n";
+        assert_eq!(
+            get_diff_content("a.rs", "fn main() {\n\tlet x=1;\n}\n", to, true),
+            "--- from/a.rs\n+++ to/a.rs\n  fn main() {\n      let x = 1;\n+     println!(\"{}\", x);\n  }"
+        );
+    }
+
+    #[test]
+    fn a_file_ending_in_a_newline_has_no_phantom_final_line() {
+        // `split('\n')` left a trailing empty element; `diff_lines` does not,
+        // and the count the tree reports has always been the latter's.
+        assert_eq!(
+            get_diff_content("a.rs", "a\nb\n", "a\nc\n", false),
+            "--- from/a.rs\n+++ to/a.rs\n  a\n- b\n+ c"
+        );
+    }
+
+    #[test]
+    fn a_reformat_only_file_counts_as_no_change_when_ignoring_whitespace() {
+        assert_eq!(DiffTreeBuilder::new(0.75, true).count_diff(FROM, TO), (0, 0));
+        assert_eq!(DiffTreeBuilder::new(0.75, false).count_diff(FROM, TO), (1, 1));
+    }
+
+    #[test]
+    fn a_reformat_only_file_leaves_the_changed_files() {
+        let tree = build_diff_tree(one_file(FROM), one_file(TO), 0.75, true);
+        let entry = &tree.children.as_ref().unwrap()[0];
+        assert!(matches!(entry.status, DiffStatus::Unchanged));
+        assert_eq!((entry.added, entry.removed), (Some(0), Some(0)));
+    }
+
+    #[test]
+    fn the_same_file_is_modified_when_whitespace_counts() {
+        let tree = build_diff_tree(one_file(FROM), one_file(TO), 0.75, false);
+        let entry = &tree.children.as_ref().unwrap()[0];
+        assert!(matches!(entry.status, DiffStatus::Modified));
+        assert_eq!((entry.added, entry.removed), (Some(1), Some(1)));
+    }
 }

@@ -1,4 +1,6 @@
 import { expect, type Page, test } from "@playwright/test";
+import { HIGHLIGHT_THEME_KEY } from "#/lib/diff/highlightThemes.ts";
+import { IGNORE_WHITESPACE_KEY, SPLIT_VIEW_KEY } from "#/lib/diff/prefs.ts";
 
 /**
  * express 4.18.2 → 5.1.0, the same comparison the viewer suite reads:
@@ -132,17 +134,85 @@ async function openSettings(page: Page) {
 	await expect(page.getByRole("button", { name: /whitespace/i })).toBeVisible();
 }
 
-test("the gear opens the settings, whitespace among them, not yet live", async ({
+const ignoreWhitespace = (page: Page) =>
+	page.getByRole("button", { name: "Ignore whitespaces" });
+
+/**
+ * express `lib/utils.js` 4.18.2 → 5.1.0. `git diff` calls it 37 added and 72
+ * removed; `git diff -w` calls it 36 and 71, so exactly one of its pairs is a
+ * line that differs in nothing but whitespace — which is what makes it the
+ * file where the setting has something to show.
+ */
+const UTILS = "/npm/express/4.18.2/5.1.0/lib/utils.js";
+
+/** What the tree says a file's change amounts to, as `+37` / `-72`. */
+async function counts(page: Page, path: string) {
+	const row = page
+		.getByRole("treeitem")
+		.and(page.locator(`[data-path="${path}"]`));
+	const number = async (testId: string) =>
+		Number((await row.getByTestId(testId).innerText()).replace(/[+-]/, ""));
+
+	return { added: await number("added"), removed: await number("removed") };
+}
+
+test("the gear opens the settings, whitespace among them", async ({ page }) => {
+	await open(page, MANIFEST);
+	await openSettings(page);
+
+	// It says whether it is on the way a chosen theme does, and it is off until
+	// it is asked for.
+	await expect(ignoreWhitespace(page)).toBeEnabled();
+	await expect(ignoreWhitespace(page)).toHaveAttribute("aria-pressed", "false");
+
+	await ignoreWhitespace(page).click();
+	await expect(ignoreWhitespace(page)).toHaveAttribute("aria-pressed", "true");
+});
+
+test("ignoring whitespace takes a reformatted line out of the diff", async ({
+	page,
+}) => {
+	await open(page, UTILS);
+	const exact = await counts(page, "lib/utils.js");
+
+	await openSettings(page);
+	await ignoreWhitespace(page).click();
+	// A new comparison: the tree is built again against the other question.
+	await expect(page.getByTestId("diff-status")).toHaveAttribute(
+		"data-state",
+		"ready",
+		ENGINE,
+	);
+	await expect(page.getByTestId("diff-view")).toBeVisible(ENGINE);
+
+	// One pair fewer, both sides — the reformatted line and the line it
+	// replaced fold together into context.
+	const ignored = await counts(page, "lib/utils.js");
+	expect(ignored.added).toBe(exact.added - 1);
+	expect(ignored.removed).toBe(exact.removed - 1);
+});
+
+test("the choice survives a reload, the way the layout does", async ({
 	page,
 }) => {
 	await open(page, MANIFEST);
 	await openSettings(page);
+	await ignoreWhitespace(page).click();
 
-	// The setting is stated rather than hidden: it is coming, and saying so is
-	// what stops it being asked for again.
-	await expect(
-		page.getByRole("button", { name: "Ignore whitespaces" }),
-	).toBeDisabled();
+	await page.reload();
+	await expect(page.getByTestId("diff-view")).toBeVisible(ENGINE);
+	await openSettings(page);
+	await expect(ignoreWhitespace(page)).toHaveAttribute("aria-pressed", "true");
+
+	// Pinned against the constant the app writes through, the way split view's
+	// is: assert only the button and a renamed key still passes while every
+	// returning visitor's choice is silently dropped.
+	expect(
+		await page.evaluate(
+			(key) => localStorage.getItem(key),
+			IGNORE_WHITESPACE_KEY,
+		),
+	).toBe("true");
 });
 
 test("names the file being read", async ({ page }) => {
@@ -184,7 +254,7 @@ test("puts the old file beside the new one, and remembers that it was asked", as
 	// The preference outlives the page: it is the same key the old app wrote,
 	// so a returning visitor's choice still stands.
 	expect(
-		await page.evaluate(() => localStorage.getItem("split-view-preference")),
+		await page.evaluate((key) => localStorage.getItem(key), SPLIT_VIEW_KEY),
 	).toBe("true");
 
 	await toolbar(page)
@@ -193,7 +263,7 @@ test("puts the old file beside the new one, and remembers that it was asked", as
 
 	await expect(splitRows(page)).toHaveCount(0);
 	expect(
-		await page.evaluate(() => localStorage.getItem("split-view-preference")),
+		await page.evaluate((key) => localStorage.getItem(key), SPLIT_VIEW_KEY),
 	).toBe("false");
 });
 
@@ -218,7 +288,10 @@ test("themes the code, and remembers which theme", async ({ page }) => {
 	// `highlight_theme` is the old app's key, so a returning visitor's theme is
 	// still theirs.
 	expect(
-		await page.evaluate(() => localStorage.getItem("highlight_theme")),
+		await page.evaluate(
+			(key) => localStorage.getItem(key),
+			HIGHLIGHT_THEME_KEY,
+		),
 	).toBe("nord");
 });
 

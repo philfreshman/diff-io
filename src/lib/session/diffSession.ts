@@ -36,9 +36,38 @@ const IDLE: DiffSessionState = {
 	file: null,
 };
 
+/**
+ * A comparison is the pair of versions *and* the question asked of them:
+ * whether whitespace counts changes which lines differ, so it is part of what
+ * is being read, not a way of showing what has already been read.
+ *
+ * Kept off `DiffRequest` because that is also the prefetch payload, and a
+ * prefetch only warms the archives — one flag there would split one set of
+ * downloads into two.
+ */
+export interface ComparisonRequest extends DiffRequest {
+	ignoreWhitespace: boolean;
+}
+
 /** Two requests are the same comparison exactly when this string matches. */
-export function sessionKey(request: DiffRequest): string {
-	return [request.registry, request.pkg, request.from, request.to].join("\n");
+function sessionKey(request: ComparisonRequest): string {
+	return [
+		request.registry,
+		request.pkg,
+		request.from,
+		request.to,
+		String(request.ignoreWhitespace),
+	].join("\n");
+}
+
+/** The download half of a request: what the engine needs to fetch, and no more. */
+function archives(request: DiffRequest): DiffRequest {
+	return {
+		registry: request.registry,
+		pkg: request.pkg,
+		from: request.from,
+		to: request.to,
+	};
 }
 
 function message(error: unknown): string {
@@ -58,23 +87,30 @@ function message(error: unknown): string {
 export function createDiffSession(client: DiffClient) {
 	const store = new Store<DiffSessionState>(IDLE);
 	const prefetched = new Set<string>();
+	/** The question the comparison on screen was built from — `openFile` asks
+	 *  the engine the same one, or the file would disagree with its tree. */
+	let ignoreWhitespace = false;
 
 	/** A reply is worth keeping only while its comparison is still the one asked for. */
 	function isCurrent(key: string): boolean {
 		return store.state.key === key;
 	}
 
-	async function start(request: DiffRequest): Promise<void> {
+	async function start(request: ComparisonRequest): Promise<void> {
 		const key = sessionKey(request);
 		// Re-entered on every render of the workspace, so asking for the
 		// comparison already on screen has to cost nothing — not two more
 		// archive downloads.
 		if (isCurrent(key)) return;
 
+		ignoreWhitespace = request.ignoreWhitespace;
 		store.setState(() => ({ ...IDLE, key, status: "loading" }));
 
 		try {
-			const tree = await client.buildTree(request);
+			const tree = await client.buildTree(
+				archives(request),
+				request.ignoreWhitespace,
+			);
 			if (!isCurrent(key)) return;
 			store.setState((state) => ({ ...state, status: "ready", tree }));
 		} catch (error) {
@@ -95,10 +131,13 @@ export function createDiffSession(client: DiffClient) {
 	 * silent, because the click is where an error has somewhere to be shown.
 	 */
 	function prefetch(request: DiffRequest): void {
-		const key = sessionKey(request);
+		// The archives alone: a prefetch warms downloads, and the same two serve
+		// either answer to the whitespace question.
+		const warming = archives(request);
+		const key = sessionKey({ ...warming, ignoreWhitespace: false });
 		if (prefetched.has(key)) return;
 		prefetched.add(key);
-		client.prefetch(request).catch(() => prefetched.delete(key));
+		client.prefetch(warming).catch(() => prefetched.delete(key));
 	}
 
 	/**
@@ -136,7 +175,11 @@ export function createDiffSession(client: DiffClient) {
 		const stillOpen = () => isCurrent(key) && store.state.file?.path === path;
 
 		try {
-			const diff = await client.getFile(entry.path, entry.oldPath);
+			const diff = await client.getFile(
+				entry.path,
+				entry.oldPath,
+				ignoreWhitespace,
+			);
 			if (!stillOpen()) return;
 			open({ path, status: "ready", diff, error: null });
 		} catch (error) {
@@ -153,8 +196,6 @@ export function createDiffSession(client: DiffClient) {
 
 	return { store, start, prefetch, openFile, reset };
 }
-
-export type DiffSession = ReturnType<typeof createDiffSession>;
 
 /**
  * One session per document, matching the one worker per document the engine's

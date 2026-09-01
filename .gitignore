@@ -35,6 +35,9 @@ npm-debug.log*
 .idea/
 *.swp
 
+# fallow's cache dir
+.fallow/
+
 # Misc
 *.tsbuildinfo
 

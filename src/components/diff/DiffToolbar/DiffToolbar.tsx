@@ -32,6 +32,9 @@ export interface DiffToolbarProps {
 	/** The old file beside the new one, rather than one after the other. */
 	split: boolean;
 	onSplitChange(split: boolean): void;
+	/** Whether a line that differs only in whitespace counts as a change. */
+	ignoreWhitespace: boolean;
+	onIgnoreWhitespaceChange(ignore: boolean): void;
 }
 
 /**
@@ -60,6 +63,8 @@ export function DiffToolbar({
 	onExpandAllChange,
 	split,
 	onSplitChange,
+	ignoreWhitespace,
+	onIgnoreWhitespaceChange,
 }: DiffToolbarProps) {
 	const open = path !== "";
 
@@ -124,41 +129,75 @@ export function DiffToolbar({
 				</span>
 			)}
 
-			<div className={styles.group}>
-				<IconButton
-					aria-label={expandAll ? "Fold all" : "Expand all"}
-					aria-pressed={expandAll}
-					title={expandAll ? "Fold all" : "Expand all"}
-					disabled={!open}
-					onClick={() => onExpandAllChange(!expandAll)}
-				>
-					{expandAll ? (
-						<FoldIcon width="16" height="16" />
-					) : (
-						<UnfoldIcon width="16" height="16" />
-					)}
-				</IconButton>
-				{/* Two buttons rather than one that swaps: which layout is showing is
-				    then readable without working out what the icon would do next. */}
-				<IconButton
-					aria-label="Switch to split view"
-					aria-pressed={split}
-					title="Switch to split view"
-					onClick={() => onSplitChange(true)}
-				>
-					<SplitViewIcon width="16" height="16" />
-				</IconButton>
-				<IconButton
-					aria-label="Switch to unified view"
-					aria-pressed={!split}
-					title="Switch to unified view"
-					onClick={() => onSplitChange(false)}
-				>
-					<UnifiedViewIcon width="16" height="16" />
-				</IconButton>
-			</div>
+			<ViewControls
+				expandAll={expandAll}
+				onExpandAllChange={onExpandAllChange}
+				onSplitChange={onSplitChange}
+				open={open}
+				split={split}
+			/>
 
-			<SettingsMenu />
+			<SettingsMenu
+				ignoreWhitespace={ignoreWhitespace}
+				onIgnoreWhitespaceChange={onIgnoreWhitespaceChange}
+			/>
+		</div>
+	);
+}
+
+/**
+ * The right-hand half: how what is being read is shown, rather than where in
+ * it the reader is. Expand-all needs a file to work on; the two layouts do
+ * not, and stay live so the choice can be made before one is opened.
+ */
+function ViewControls({
+	expandAll,
+	onExpandAllChange,
+	split,
+	onSplitChange,
+	open,
+}: Pick<
+	DiffToolbarProps,
+	"expandAll" | "onExpandAllChange" | "split" | "onSplitChange"
+> & {
+	/** Whether a file is open — see `DiffToolbarProps["path"]`. */
+	open: boolean;
+}) {
+	const fold = expandAll ? "Fold all" : "Expand all";
+
+	return (
+		<div className={styles.group}>
+			<IconButton
+				aria-label={fold}
+				aria-pressed={expandAll}
+				title={fold}
+				disabled={!open}
+				onClick={() => onExpandAllChange(!expandAll)}
+			>
+				{expandAll ? (
+					<FoldIcon width="16" height="16" />
+				) : (
+					<UnfoldIcon width="16" height="16" />
+				)}
+			</IconButton>
+			{/* Two buttons rather than one that swaps: which layout is showing is
+			    then readable without working out what the icon would do next. */}
+			<IconButton
+				aria-label="Switch to split view"
+				aria-pressed={split}
+				title="Switch to split view"
+				onClick={() => onSplitChange(true)}
+			>
+				<SplitViewIcon width="16" height="16" />
+			</IconButton>
+			<IconButton
+				aria-label="Switch to unified view"
+				aria-pressed={!split}
+				title="Switch to unified view"
+				onClick={() => onSplitChange(false)}
+			>
+				<UnifiedViewIcon width="16" height="16" />
+			</IconButton>
 		</div>
 	);
 }
