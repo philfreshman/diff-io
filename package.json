@@ -17,7 +17,8 @@
 		"screenshots": "bun scripts/capture-screenshots.mjs",
 		"lint": "biome lint .",
 		"format": "biome format .",
-		"typecheck": "tsc --noEmit"
+		"typecheck": "tsc --noEmit",
+		"check:wasm-types": "bun scripts/check-wasm-types.mjs"
 	},
 	"dependencies": {
 		"@base-ui/react": "1.7.0",
