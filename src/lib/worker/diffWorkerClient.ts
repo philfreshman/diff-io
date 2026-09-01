@@ -56,13 +56,29 @@ function send<T>(request: WorkerRequestInput): Promise<T> {
 
 export const diffClient = {
 	/** Downloads both versions, extracts them, and returns the diff tree. */
-	buildTree(request: DiffRequest): Promise<DiffFileEntry> {
-		return send<DiffFileEntry>({ type: "build-tree", ...request });
+	buildTree(
+		request: DiffRequest,
+		ignoreWhitespace: boolean,
+	): Promise<DiffFileEntry> {
+		return send<DiffFileEntry>({
+			type: "build-tree",
+			...request,
+			ignoreWhitespace,
+		});
 	},
 
 	/** Reads one file's diff out of the cache populated by `buildTree`. */
-	getFile(path: string, oldPath?: string): Promise<FileDiff> {
-		return send<FileDiff>({ type: "get-file", path, oldPath });
+	getFile(
+		path: string,
+		oldPath: string | undefined,
+		ignoreWhitespace: boolean,
+	): Promise<FileDiff> {
+		return send<FileDiff>({
+			type: "get-file",
+			path,
+			oldPath,
+			ignoreWhitespace,
+		});
 	},
 
 	/** Warms the extraction cache so a later `buildTree` skips the downloads. */

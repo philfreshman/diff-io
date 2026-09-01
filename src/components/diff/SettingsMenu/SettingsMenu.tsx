@@ -8,6 +8,12 @@ import {
 import { HIGHLIGHT_THEMES } from "#/lib/diff/highlightThemes.ts";
 import styles from "./SettingsMenu.module.css";
 
+export interface SettingsMenuProps {
+	/** Whether a line that differs only in whitespace counts as a change. */
+	ignoreWhitespace: boolean;
+	onIgnoreWhitespaceChange(ignore: boolean): void;
+}
+
 /**
  * The gear: everything about how a diff is read that is not a button in its
  * own right on the toolbar.
@@ -17,7 +23,10 @@ import styles from "./SettingsMenu.module.css";
  * own — and because that is what the two of them will keep being as more are
  * added.
  */
-export function SettingsMenu() {
+export function SettingsMenu({
+	ignoreWhitespace,
+	onIgnoreWhitespaceChange,
+}: SettingsMenuProps) {
 	const highlight = useHighlightTheme();
 
 	return (
@@ -35,12 +44,22 @@ export function SettingsMenu() {
 					<NavigationMenu.Content className={styles.content}>
 						<ul className={styles.options}>
 							<li>
-								{/* Stated rather than hidden: the setting is coming, and
-								    saying so is what stops it being asked for again. Once it
-								    is live it says so the way a chosen theme does — with a
-								    tick at the end of its own row. */}
-								<button className={styles.option} disabled type="button">
+								{/* It says whether it is on the way a chosen theme does —
+								    a tick at the end of its own row. */}
+								<button
+									className={styles.option}
+									aria-pressed={ignoreWhitespace}
+									onClick={() => onIgnoreWhitespaceChange(!ignoreWhitespace)}
+									type="button"
+								>
 									Ignore whitespaces
+									{ignoreWhitespace && (
+										<CheckIcon
+											className={styles.chosen}
+											width="14"
+											height="14"
+										/>
+									)}
 								</button>
 							</li>
 

@@ -29,6 +29,7 @@ async function handle(request: WorkerRequest): Promise<unknown> {
 				request.from,
 				request.to,
 				SIMILARITY_THRESHOLD,
+				request.ignoreWhitespace,
 			);
 		case "prefetch":
 			await Promise.all([
@@ -37,7 +38,11 @@ async function handle(request: WorkerRequest): Promise<unknown> {
 			]);
 			return undefined;
 		case "get-file":
-			return get_diff_for_path(request.path, request.oldPath);
+			return get_diff_for_path(
+				request.path,
+				request.oldPath,
+				request.ignoreWhitespace,
+			);
 	}
 }
 

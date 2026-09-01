@@ -32,6 +32,9 @@ export interface DiffToolbarProps {
 	/** The old file beside the new one, rather than one after the other. */
 	split: boolean;
 	onSplitChange(split: boolean): void;
+	/** Whether a line that differs only in whitespace counts as a change. */
+	ignoreWhitespace: boolean;
+	onIgnoreWhitespaceChange(ignore: boolean): void;
 }
 
 /**
@@ -60,6 +63,8 @@ export function DiffToolbar({
 	onExpandAllChange,
 	split,
 	onSplitChange,
+	ignoreWhitespace,
+	onIgnoreWhitespaceChange,
 }: DiffToolbarProps) {
 	const open = path !== "";
 
@@ -158,7 +163,10 @@ export function DiffToolbar({
 				</IconButton>
 			</div>
 
-			<SettingsMenu />
+			<SettingsMenu
+				ignoreWhitespace={ignoreWhitespace}
+				onIgnoreWhitespaceChange={onIgnoreWhitespaceChange}
+			/>
 		</div>
 	);
 }

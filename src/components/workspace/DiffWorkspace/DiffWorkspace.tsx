@@ -4,6 +4,7 @@ import { DiffToolbar } from "#/components/diff/DiffToolbar/DiffToolbar.tsx";
 import type { DiffViewHandle } from "#/components/diff/DiffView/DiffView.tsx";
 import { DiffView } from "#/components/diff/DiffView/DiffView.tsx";
 import { useDiffView } from "#/components/diff/useDiffView.ts";
+import { useIgnoreWhitespace } from "#/components/diff/useIgnoreWhitespace.ts";
 import { TreePanel } from "#/components/tree/TreePanel/TreePanel.tsx";
 import { Spinner } from "#/components/ui/Spinner/Spinner.tsx";
 import { countDifferences } from "#/lib/diff/changes.ts";
@@ -32,7 +33,8 @@ import styles from "./DiffWorkspace.module.css";
 export function DiffWorkspace({ slug }: { slug: DiffSlug }) {
 	const adapter = requireAdapter(slug.registry);
 	const navigate = useNavigate();
-	const session = useDiffSession(slug);
+	const whitespace = useIgnoreWhitespace();
+	const session = useDiffSession(slug, whitespace.ignore);
 	const files = flattenFiles(session.tree);
 	// The files the toolbar's arrows walk: the unchanged ones are what the tree
 	// hides by default, and stepping into one would look like a broken button.
@@ -130,6 +132,8 @@ export function DiffWorkspace({ slug }: { slug: DiffSlug }) {
 							onExpandAllChange={viewer.setExpandAll}
 							split={viewer.split}
 							onSplitChange={viewer.setSplit}
+							ignoreWhitespace={whitespace.ignore === true}
+							onIgnoreWhitespaceChange={whitespace.set}
 						/>
 						{session.status === "idle" && (
 							<p className={styles.empty}>Choose a package and two versions.</p>
