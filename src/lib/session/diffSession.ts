@@ -37,7 +37,7 @@ const IDLE: DiffSessionState = {
 };
 
 /** Two requests are the same comparison exactly when this string matches. */
-export function sessionKey(request: DiffRequest): string {
+function sessionKey(request: DiffRequest): string {
 	return [request.registry, request.pkg, request.from, request.to].join("\n");
 }
 
@@ -153,8 +153,6 @@ export function createDiffSession(client: DiffClient) {
 
 	return { store, start, prefetch, openFile, reset };
 }
-
-export type DiffSession = ReturnType<typeof createDiffSession>;
 
 /**
  * One session per document, matching the one worker per document the engine's
