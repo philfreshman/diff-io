@@ -111,3 +111,6 @@ export function writeSelection(selection: ThemeSelection): void {
 		// Preference is not persisted; the in-page theme still changes.
 	}
 }
+
+// deliberate CI redness probe — reverted immediately
+export const PROBE: number = "not a number";
