@@ -47,6 +47,17 @@ test("decides from the head of the file, not the whole of it", () => {
 	expect(detectLanguage("Makefile", lines)).toBe("json");
 });
 
+test("reads the head of a line rather than the whole of it", () => {
+	// A file with no newlines in it — a `.eslintcache`, a minified bundle — is
+	// one line of half a megabyte. Handed that whole, `highlightAuto` runs
+	// every grammar it knows over all of it and the page stops answering for
+	// the better part of a minute, so only the head of a line is evidence.
+	const head = ".button { color: red; padding: 4px; } ".repeat(11);
+	const tail = '{"name":"node","version":"26.7.0"},'.repeat(12_000);
+
+	expect(detectLanguage(".eslintcache", unchanged(head + tail))).toBe("css");
+});
+
 test("has nothing to say about an empty file", () => {
 	expect(detectLanguage("LICENSE", [])).toBe(null);
 	expect(detectLanguage("LICENSE", unchanged("", "", ""))).toBe(null);
@@ -68,5 +79,23 @@ describe("highlightLine", () => {
 
 	test("leaves a line alone when the language is unknown", () => {
 		expect(highlightLine("just some prose", null)).toBe("just some prose");
+	});
+
+	test("leaves a line too long to be read as plain text", () => {
+		// Marking a line up costs roughly its own length again in `<span>`s,
+		// and all of it goes into one cell of one row: the half-megabyte line
+		// of a `.eslintcache` came to over six megabytes of DOM, which is what
+		// froze the tab rather than the highlighting itself.
+		const line = '{"name":"node"},'.repeat(10_000);
+
+		expect(highlightLine(line, "json")).toBe(line);
+	});
+
+	test("still escapes a line it is too long to mark up", () => {
+		const line = `${"a".repeat(20_000)}<img src=x onerror=alert(1)>`;
+		const html = highlightLine(line, "html");
+
+		expect(html).not.toContain("<img");
+		expect(html).toContain("&lt;img");
 	});
 });
