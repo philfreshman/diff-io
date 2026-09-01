@@ -48,7 +48,12 @@ struct DiffResult {
     is_diff: bool,
 }
 
-fn build_diff_result(filename: &str, from_content: Option<&str>, to_content: Option<&str>) -> DiffResult {
+fn build_diff_result(
+    filename: &str,
+    from_content: Option<&str>,
+    to_content: Option<&str>,
+    ignore_whitespace: bool,
+) -> DiffResult {
     match (from_content, to_content) {
         (None, None) => DiffResult {
             data: "File not present in either version.".to_string(),
@@ -86,7 +91,7 @@ fn build_diff_result(filename: &str, from_content: Option<&str>, to_content: Opt
                 }
             } else {
                 DiffResult {
-                    data: core::get_diff_content(filename, from, to),
+                    data: core::get_diff_content(filename, from, to, ignore_whitespace),
                     is_diff: true,
                 }
             }
@@ -111,10 +116,11 @@ pub async fn build_diff_tree_for_package(
     from: String,
     to: String,
     similarity_threshold: f64,
+    ignore_whitespace: bool,
 ) -> Result<JsValue, JsValue> {
     let from_files = get_or_fetch_package(&registry, &pkg, &from).await?;
     let to_files = get_or_fetch_package(&registry, &pkg, &to).await?;
-    let tree = core::build_diff_tree(from_files, to_files, similarity_threshold);
+    let tree = core::build_diff_tree(from_files, to_files, similarity_threshold, ignore_whitespace);
 
     let from_key = cache_key(&registry, &pkg, &from);
     let to_key = cache_key(&registry, &pkg, &to);
@@ -126,7 +132,11 @@ pub async fn build_diff_tree_for_package(
 }
 
 #[wasm_bindgen]
-pub fn get_diff_for_path(filename: String, old_path: Option<String>) -> Result<JsValue, JsValue> {
+pub fn get_diff_for_path(
+    filename: String,
+    old_path: Option<String>,
+    ignore_whitespace: bool,
+) -> Result<JsValue, JsValue> {
     let active = ACTIVE_DIFF
         .with(|state| state.borrow().clone())
         .ok_or_else(|| JsValue::from_str("No active diff context"))?;
@@ -157,6 +167,7 @@ pub fn get_diff_for_path(filename: String, old_path: Option<String>) -> Result<J
         &filename,
         from_content.as_deref(),
         to_content.as_deref(),
+        ignore_whitespace,
     );
     Ok(serde_wasm_bindgen::to_value(&result)?)
 }

@@ -1,16 +1,20 @@
 import { describe, expect, test } from "bun:test";
-import { createDiffSession } from "#/lib/session/diffSession.ts";
+import {
+	type ComparisonRequest,
+	createDiffSession,
+} from "#/lib/session/diffSession.ts";
 import type {
 	DiffFileEntry,
 	DiffRequest,
 	FileDiff,
 } from "#/lib/worker/protocol.ts";
 
-const REQUEST: DiffRequest = {
+const REQUEST: ComparisonRequest = {
 	registry: "npm",
 	pkg: "express",
 	from: "4.18.2",
 	to: "5.1.0",
+	ignoreWhitespace: false,
 };
 
 const TREE: DiffFileEntry = {
@@ -47,7 +51,7 @@ function deferred<T>() {
  */
 function stubClient() {
 	const trees: Array<ReturnType<typeof deferred<DiffFileEntry>>> = [];
-	const filesAsked: Array<[string, string | undefined]> = [];
+	const filesAsked: Array<[string, string | undefined, boolean]> = [];
 	const fileReplies: Array<ReturnType<typeof deferred<FileDiff>>> = [];
 	const prefetched: DiffRequest[] = [];
 	let prefetchFails = false;
@@ -66,8 +70,8 @@ function stubClient() {
 				trees.push(next);
 				return next.promise;
 			},
-			getFile(path: string, oldPath?: string) {
-				filesAsked.push([path, oldPath]);
+			getFile(path: string, oldPath: string | undefined, ignore: boolean) {
+				filesAsked.push([path, oldPath, ignore]);
 				const next = deferred<FileDiff>();
 				fileReplies.push(next);
 				return next.promise;
@@ -163,6 +167,49 @@ describe("start", () => {
 	});
 });
 
+describe("ignoring whitespace", () => {
+	test("is a different comparison, so the tree is built again", async () => {
+		// Not a repaint of the tree on screen: which lines differ is the
+		// engine's answer, and the engine has to be asked the other question.
+		const stub = stubClient();
+		const session = createDiffSession(stub.client);
+
+		const running = session.start(REQUEST);
+		take(stub.trees, 0).resolve(TREE);
+		await running;
+
+		void session.start({ ...REQUEST, ignoreWhitespace: true });
+		expect(stub.trees).toHaveLength(2);
+		expect(session.store.state.status).toBe("loading");
+	});
+
+	test("is not part of a prefetch, which only warms the downloads", async () => {
+		// One prefetch per pair of archives, whatever the setting says — the
+		// flag has no bearing on what is downloaded or extracted.
+		const stub = stubClient();
+		const session = createDiffSession(stub.client);
+
+		const ignoring: ComparisonRequest = { ...REQUEST, ignoreWhitespace: true };
+		session.prefetch(REQUEST);
+		session.prefetch(ignoring);
+
+		expect(stub.prefetched).toHaveLength(1);
+		expect(stub.prefetched[0]).not.toHaveProperty("ignoreWhitespace");
+	});
+
+	test("reaches the engine when a file is read", async () => {
+		const stub = stubClient();
+		const session = createDiffSession(stub.client);
+
+		const running = session.start({ ...REQUEST, ignoreWhitespace: true });
+		take(stub.trees, 0).resolve(TREE);
+		await running;
+		void session.openFile("index.js");
+
+		expect(stub.filesAsked[0]).toEqual(["index.js", undefined, true]);
+	});
+});
+
 describe("openFile", () => {
 	async function readySession() {
 		const stub = stubClient();
@@ -197,7 +244,11 @@ describe("openFile", () => {
 
 		void session.openFile("lib/router.js");
 
-		expect(stub.filesAsked[0]).toEqual(["lib/router.js", "lib/routes.js"]);
+		expect(stub.filesAsked[0]).toEqual([
+			"lib/router.js",
+			"lib/routes.js",
+			false,
+		]);
 	});
 
 	test("an empty path closes whatever was open", async () => {

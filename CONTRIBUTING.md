@@ -75,6 +75,13 @@ bun run test:e2e    # Playwright — drives the real app against the real regist
 The e2e suite downloads real archives, so it is slow and needs a network. It is the only place the
 WebAssembly actually runs, which is why the coverage lives there rather than in mocked unit tests.
 
+The Rust engine has its own tests, which no `bun` script runs — they compile for the host, not for
+`wasm32`, and are the fastest way to pin what a diff renders:
+
+```bash
+cd wasm/diff-wasm && cargo test
+```
+
 The pre-commit hook runs `typecheck`, `lint` and `format` — **not** the tests. Run them yourself.
 
 ## Development Workflow

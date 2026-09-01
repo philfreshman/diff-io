@@ -29,10 +29,25 @@ export type DiffRequest = {
 	to: string;
 };
 
+/**
+ * `ignoreWhitespace` rides the two calls that diff and not the one that
+ * downloads: prefetch only warms the archives, and the same two serve either
+ * answer — a flag there would split one set of downloads into two.
+ */
 export type WorkerRequest =
-	| ({ id: number; type: "build-tree" } & DiffRequest)
+	| ({
+			id: number;
+			type: "build-tree";
+			ignoreWhitespace: boolean;
+	  } & DiffRequest)
 	| ({ id: number; type: "prefetch" } & DiffRequest)
-	| { id: number; type: "get-file"; path: string; oldPath?: string };
+	| {
+			id: number;
+			type: "get-file";
+			path: string;
+			oldPath?: string;
+			ignoreWhitespace: boolean;
+	  };
 
 /** `Omit` over a union must distribute, or the per-variant fields are lost. */
 export type WorkerRequestInput = WorkerRequest extends infer T
