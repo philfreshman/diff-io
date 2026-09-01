@@ -1,4 +1,5 @@
 import { expect, type Page, test } from "@playwright/test";
+import { TREE_WIDTH_KEY } from "#/lib/tree/prefs.ts";
 
 /**
  * express 4.18.2 → 5.1.0: a real, nested, thoroughly changed comparison, which
@@ -281,9 +282,9 @@ test("the panel is resizable, within limits, and stays where it was put", async 
 test("a stored width is applied before the first paint", async ({ page }) => {
 	// Applied by the pre-paint script, like the theme: a panel that starts at
 	// its default and jumps once React hydrates is a visible flash.
-	await page.addInitScript(() => {
-		localStorage.setItem("tree_panel_width", "9999");
-	});
+	await page.addInitScript((key) => {
+		localStorage.setItem(key, "9999");
+	}, TREE_WIDTH_KEY);
 	await page.goto(EXPRESS);
 
 	const applied = await page.evaluate(() =>

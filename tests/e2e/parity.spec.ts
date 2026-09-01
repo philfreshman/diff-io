@@ -1,5 +1,10 @@
 import { readFileSync } from "node:fs";
 import { expect, type Page, test } from "@playwright/test";
+import { HIGHLIGHT_THEME_KEY } from "#/lib/diff/highlightThemes.ts";
+import { SPLIT_VIEW_KEY } from "#/lib/diff/prefs.ts";
+import { historyKey } from "#/lib/storage/searchHistory.ts";
+import { THEME_STORAGE_KEY } from "#/lib/theme.ts";
+import { ONLY_MODIFIED_KEY, TREE_WIDTH_KEY } from "#/lib/tree/prefs.ts";
 
 /**
  * Task 15's parity gate. The other specs each prove one feature; this one walks
@@ -89,6 +94,20 @@ test("no file in a Go module reads as its versioned root", async ({ page }) => {
 });
 
 /**
+ * The six keys, seeded through the app's own constants and asserted against the
+ * old site's literals below. Every other spec addresses storage through these
+ * same constants, so this object is the only place the literal names appear.
+ */
+const STORED = {
+	[THEME_STORAGE_KEY]: "light",
+	[SPLIT_VIEW_KEY]: "true",
+	[HIGHLIGHT_THEME_KEY]: "nightfall",
+	[TREE_WIDTH_KEY]: "320",
+	[ONLY_MODIFIED_KEY]: "false",
+	[historyKey("npm")]: JSON.stringify([{ name: "express" }]),
+};
+
+/**
  * The six keys are a contract with people who already used the site: a rename
  * or a reshaped value silently drops their theme, their panel width and their
  * history on the floor. Names *and* value formats, therefore, not just names.
@@ -96,22 +115,10 @@ test("no file in a Go module reads as its versioned root", async ({ page }) => {
 test("writes the same six localStorage keys as the old site", async ({
 	page,
 }) => {
-	await page.addInitScript(() => {
-		localStorage.setItem("theme", "light");
-		localStorage.setItem("split-view-preference", "true");
-		localStorage.setItem("highlight_theme", "nightfall");
-		localStorage.setItem("tree_panel_width", "320");
-		localStorage.setItem("tree_show_only_modified", "false");
-		localStorage.setItem(
-			"search_history_npm",
-			JSON.stringify([{ name: "express" }]),
-		);
-	});
-	await ready(page, "/npm/node/26.6.0/26.7.0");
-
-	const stored = await page.evaluate(() => ({ ...localStorage }));
-
-	expect(Object.keys(stored).sort()).toEqual([
+	// The names are pinned here rather than in each spec that seeds one: this is
+	// the contract, so a renamed constant has to fail *this* test rather than
+	// quietly carrying every other spec along with it.
+	expect(Object.keys(STORED).sort()).toEqual([
 		"highlight_theme",
 		"search_history_npm",
 		"split-view-preference",
@@ -119,14 +126,21 @@ test("writes the same six localStorage keys as the old site", async ({
 		"tree_panel_width",
 		"tree_show_only_modified",
 	]);
-	// Each one is still read as what it was written as, rather than being
-	// overwritten with a differently-shaped value on first render.
-	expect(stored.theme).toBe("light");
-	expect(stored["split-view-preference"]).toBe("true");
-	expect(stored.highlight_theme).toBe("nightfall");
-	expect(stored.tree_panel_width).toBe("320");
-	expect(stored.tree_show_only_modified).toBe("false");
-	expect(JSON.parse(stored.search_history_npm)).toEqual([{ name: "express" }]);
+
+	await page.addInitScript((entries) => {
+		for (const [key, value] of entries) localStorage.setItem(key, value);
+	}, Object.entries(STORED));
+	await ready(page, "/npm/node/26.6.0/26.7.0");
+
+	const stored = await page.evaluate(() => ({ ...localStorage }));
+
+	// Nothing added, nothing dropped, and each one still read as what it was
+	// written as rather than overwritten with a differently-shaped value on
+	// first render.
+	expect(Object.keys(stored).sort()).toEqual(Object.keys(STORED).sort());
+	for (const [key, value] of Object.entries(STORED)) {
+		expect(stored[key]).toBe(value);
+	}
 
 	// And the page honoured them rather than merely leaving them alone.
 	await expect(page.locator("html")).toHaveAttribute("data-theme", "light");

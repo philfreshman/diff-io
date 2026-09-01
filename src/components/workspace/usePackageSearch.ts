@@ -3,12 +3,12 @@ import { useEffect, useState } from "react";
 import type { RegistryAdapter, SearchResult } from "#/lib/registries/types.ts";
 
 /** A single character matches most of a registry; two is where results mean something. */
-export const MIN_QUERY_LENGTH = 2;
+const MIN_QUERY_LENGTH = 2;
 
 /** Long enough that a typed word is one request, short enough to feel live. */
-export const SEARCH_DEBOUNCE_MS = 300;
+const SEARCH_DEBOUNCE_MS = 300;
 
-export function useDebouncedValue<T>(value: T, delay: number): T {
+function useDebouncedValue<T>(value: T, delay: number): T {
 	const [debounced, setDebounced] = useState(value);
 
 	useEffect(() => {

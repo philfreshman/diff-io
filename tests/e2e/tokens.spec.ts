@@ -1,4 +1,5 @@
 import { expect, type Page, test } from "@playwright/test";
+import { THEME_STORAGE_KEY } from "#/lib/theme.ts";
 
 function tokenValue(page: Page, token: string) {
 	return page.evaluate(
@@ -11,7 +12,10 @@ function tokenValue(page: Page, token: string) {
 test("semantic colour tokens resolve to different values per theme", async ({
 	page,
 }) => {
-	await page.addInitScript(() => localStorage.setItem("theme", "light"));
+	await page.addInitScript(
+		(key) => localStorage.setItem(key, "light"),
+		THEME_STORAGE_KEY,
+	);
 	await page.goto("/");
 
 	const light = {
