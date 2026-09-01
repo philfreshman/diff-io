@@ -7,8 +7,9 @@ Thank you for your interest in contributing to diffpack! This document provides 
 ### Prerequisites
 
 - [Bun](https://bun.sh) (v1.x or later)
-- A Rust toolchain with the `wasm32-unknown-unknown` target — needed for the **first** run, not
-  only for Rust work, because the app will not start without the compiled module
+- A Rust toolchain with the `wasm32-unknown-unknown` target — needed to **run or build** the app,
+  not only for Rust work, because the app will not start without the compiled module. Typechecking,
+  linting and the unit tests do not need it.
 
 ### Setup
 
@@ -26,6 +27,16 @@ Thank you for your interest in contributing to diffpack! This document provides 
    bun run dev
    ```
 
+Steps 1 and 2 alone are enough to check that a clone is sound:
+
+```bash
+git clone && bun install && bun run typecheck   # must exit 0, no Rust toolchain
+```
+
+That is the contributor smoke test, and the pre-commit hook holds to the same standard: neither
+needs `wasm/diff-wasm/pkg/`. `bun run build:wasm` is only required to actually run (`dev`,
+`preview`) or build the app.
+
 ### WASM development
 
 The extraction and diffing logic is Rust, compiled to WebAssembly with
@@ -39,6 +50,20 @@ Its output, `wasm/diff-wasm/pkg/`, is generated and gitignored, and is deliberat
 `package.json` dependency: a `file:` dependency breaks `bun install` in environments without a Rust
 toolchain, and breaks Renovate's lockfile updates. The `diff-wasm` specifier resolves through the
 `paths` entry in `tsconfig.json` and the `resolve.alias` entry in `vite.config.ts` instead.
+
+Those two resolve it to different places, on purpose. Vite aliases it to the generated `pkg/`, the
+real module. `tsc` reads the checked-in `wasm/diff-wasm/types/diff-wasm.d.ts` instead, so
+`bun run typecheck` never depends on output only a Rust toolchain can produce.
+
+That declaration is hand-written, so it can fall behind `wasm/diff-wasm/src/lib.rs`. **After
+changing any `#[wasm_bindgen]` signature, update it** and check it:
+
+```bash
+bun run build:wasm && bun run check:wasm-types
+```
+
+The check compares the declared signatures against the generated `pkg/diff_wasm.d.ts` and fails on
+any divergence. It needs the toolchain, so it runs in CI rather than in the pre-commit hook.
 
 ### Tests
 

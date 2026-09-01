@@ -9,7 +9,7 @@
 		"types": ["vite/client", "bun"],
 		"paths": {
 			"#/*": ["./src/*"],
-			"diff-wasm": ["./wasm/diff-wasm/pkg"],
+			"diff-wasm": ["./wasm/diff-wasm/types/diff-wasm.d.ts"],
 			"diff-wasm/*": ["./wasm/diff-wasm/pkg/*"]
 		},
 
