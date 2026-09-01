@@ -1,6 +1,6 @@
 import { expect, type Page, test } from "@playwright/test";
 import { HIGHLIGHT_THEME_KEY } from "#/lib/diff/highlightThemes.ts";
-import { SPLIT_VIEW_KEY } from "#/lib/diff/prefs.ts";
+import { IGNORE_WHITESPACE_KEY, SPLIT_VIEW_KEY } from "#/lib/diff/prefs.ts";
 
 /**
  * express 4.18.2 → 5.1.0, the same comparison the viewer suite reads:
@@ -203,6 +203,16 @@ test("the choice survives a reload, the way the layout does", async ({
 	await expect(page.getByTestId("diff-view")).toBeVisible(ENGINE);
 	await openSettings(page);
 	await expect(ignoreWhitespace(page)).toHaveAttribute("aria-pressed", "true");
+
+	// Pinned against the constant the app writes through, the way split view's
+	// is: assert only the button and a renamed key still passes while every
+	// returning visitor's choice is silently dropped.
+	expect(
+		await page.evaluate(
+			(key) => localStorage.getItem(key),
+			IGNORE_WHITESPACE_KEY,
+		),
+	).toBe("true");
 });
 
 test("names the file being read", async ({ page }) => {

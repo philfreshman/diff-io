@@ -14,27 +14,18 @@
 	list-style: none;
 }
 
+/*
+ * The gear *is* one of the toolbar's icon buttons, so it borrows the surface
+ * rather than restating it — the hover and the focus ring come with it, and
+ * the two cannot drift apart the way two copies of the same rules can.
+ */
 .gear {
-	display: inline-flex;
-	align-items: center;
-	justify-content: center;
-	padding: var(--space-2);
-	border: 0;
-	border-radius: var(--radius-md);
-	background: transparent;
-	color: currentColor;
-	cursor: pointer;
-	transition: background-color var(--duration-fast) ease;
+	composes: iconButton from "../../ui/IconButton/IconButton.module.css";
 }
 
-.gear:hover,
+/* What it adds: a menu trigger stays lit while its menu is up. */
 .gear[data-popup-open] {
 	background-color: var(--color-surface-hover);
-}
-
-.gear:focus-visible {
-	outline: 2px solid var(--color-focus-ring);
-	outline-offset: 2px;
 }
 
 .positioner {

@@ -47,6 +47,22 @@ function substringFilter(text: string, query: string): boolean {
 }
 
 /**
+ * How the list is narrowed, as the one predicate Base UI is given: the
+ * caller's own, a substring match over the item's text, or nothing at all
+ * when the items arrive already filtered.
+ */
+function resolveFilter<T>(
+	filter: ComboboxProps<T>["filter"],
+	itemToText: (item: T) => string,
+) {
+	if (filter === null) return null;
+	if (filter) return (item: unknown, query: string) => filter(item as T, query);
+
+	return (item: unknown, query: string) =>
+		substringFilter(itemToText(item as T), query);
+}
+
+/**
  * The one combobox: package search and both version selectors are the same
  * interaction — a text input over a filtered list, driven by ↑↓/Enter/Escape.
  * The old app had three hand-rolled copies and three sets of bugs.
@@ -107,13 +123,7 @@ export function Combobox<T>({
 			}}
 			itemToStringLabel={(item) => itemToText(item as T)}
 			itemToStringValue={(item) => itemToText(item as T)}
-			filter={
-				filter === null
-					? null
-					: filter
-						? (item, query) => filter(item as T, query)
-						: (item, query) => substringFilter(itemToText(item as T), query)
-			}
+			filter={resolveFilter(filter, itemToText)}
 			openOnInputClick
 			loopFocus
 			disabled={disabled}
