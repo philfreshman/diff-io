@@ -13,6 +13,18 @@ import type { DiffLine } from "#/lib/diff/parseUnifiedDiff.ts";
 /** How much of the file the language is guessed from, when it has to be. */
 const SAMPLE_LINES = 200;
 const SAMPLE_CHARS = 20_000;
+/**
+ * And how much of any one line of it.
+ *
+ * `highlightAuto` runs every grammar it knows over what it is handed, and its
+ * cost climbs with the length of a *line* far faster than with the number of
+ * them: 200 lines of source is under two hundred milliseconds, while a single
+ * line of the same length is closer to a second, and a whole minified file —
+ * a `.eslintcache`, a bundle — is twenty seconds of frozen page. The head of
+ * a line is also all the evidence there is in it; the rest is more of the
+ * same.
+ */
+const SAMPLE_LINE_CHARS = 400;
 
 /**
  * What the file is written in.
@@ -46,13 +58,17 @@ function languageFromPath(path: string): string | null {
 
 function detectionSample(lines: DiffLine[]): string {
 	const sampled: string[] = [];
-	let chars = 0;
+	let budget = SAMPLE_CHARS;
 
 	for (const [index, line] of lines.entries()) {
-		if (index >= SAMPLE_LINES || chars > SAMPLE_CHARS) break;
+		if (index >= SAMPLE_LINES || budget <= 0) break;
 		if (!line.content) continue;
-		sampled.push(line.content);
-		chars += line.content.length;
+		// Cut to the budgets rather than counted against them afterwards: a
+		// file with no newlines in it is a single line of half a megabyte, and
+		// counting only notices once the whole of it is already in the sample.
+		const head = line.content.slice(0, Math.min(SAMPLE_LINE_CHARS, budget));
+		sampled.push(head);
+		budget -= head.length;
 	}
 
 	return sampled.join("\n");
@@ -68,6 +84,17 @@ const CACHE_LIMIT = 20_000;
 const cache = new Map<string, string>();
 
 /**
+ * Past this, a line is shown as plain text.
+ *
+ * Marking one up costs roughly its own length again in `<span>`s, and that
+ * markup goes into a single cell of a single row — a 580 000-character line
+ * becomes over six megabytes of DOM that the browser cannot lay out. No line
+ * anyone reads is this long: the ones that are come from files written by a
+ * machine, where the colouring was never going to help.
+ */
+const MAX_HIGHLIGHT_CHARS = 10_000;
+
+/**
  * One line, marked up. A language highlight.js does not know — and a file it
  * could not place at all — leaves the line as text, escaped either way: the
  * markup goes into the row as HTML, so nothing may survive from the archive.
@@ -76,7 +103,10 @@ export function highlightLine(
 	content: string,
 	language: string | null,
 ): string {
-	if (!language || !hljs.getLanguage(language)) return escapeHtml(content);
+	const tooLong = content.length > MAX_HIGHLIGHT_CHARS;
+	if (!language || tooLong || !hljs.getLanguage(language)) {
+		return escapeHtml(content);
+	}
 
 	const key = `${language} ${content}`;
 	const cached = cache.get(key);
