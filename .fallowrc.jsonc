@@ -1,0 +1,84 @@
+{
+	"$schema": "https://raw.githubusercontent.com/fallow-rs/fallow/main/schema.json",
+
+	// `src/lib/worker/diff.worker.ts:6` imports the wasm binary as a URL:
+	//   import wasmUrl from "diff-wasm/diff_wasm_bg.wasm?url"
+	// `diff-wasm` is an alias declared in `vite.config.ts` (`resolve.alias`)
+	// pointing at `wasm/diff-wasm/pkg`, which `bun run build:wasm` generates and
+	// which is deliberately NOT a package.json dependency: a `file:` dep breaks
+	// `bun install` in toolchain-less environments and breaks Renovate lockfile
+	// updates. See the comment on the alias in `vite.config.ts` for the full
+	// rationale. fallow does not read Vite aliases, so it is told here.
+	//
+	// The bare `diff-wasm` specifier on line 5 is NOT listed: #114 added a
+	// checked-in declaration at `wasm/diff-wasm/types/diff-wasm.d.ts` and a
+	// tsconfig `paths` entry for it, so fallow resolves that one on its own.
+	// The `?url` suffix on line 6 is a Vite query, which no tsconfig path can
+	// describe — it stays here.
+	"ignoreUnresolvedImports": ["diff-wasm/diff_wasm_bg.wasm?url"],
+
+	// `public/` is copied to the site root verbatim; nothing imports it and
+	// nothing should. `public/nightfall.css` is fetched at runtime from a string
+	// reference in `src/lib/diff/highlightThemes.ts` (`asset: "/nightfall.css"`),
+	// so static import-graph reachability is the wrong question to ask of this
+	// directory.
+	"ignorePatterns": ["public/**"],
+
+	"health": {
+		// Decision 1 on #111: CRAP is advisory here, never a gate.
+		// `bun test --coverage` emits only text and lcov; fallow wants Istanbul
+		// `coverage-final.json`, so every CRAP number in this repo is
+		// `static_estimated` — derived from how many places reference an export,
+		// not from real coverage. Gating on that means a function starts failing
+		// because an unrelated file stopped importing it. The number stays in the
+		// report for triage ranking (it is how the #118 refactor priorities were
+		// chosen); this ceiling is set out of reach so it cannot block.
+		// Revisit only if Playwright V8 coverage gets wired for other reasons.
+		"maxCrap": 1000000,
+	},
+
+	"rules": {
+		// Decision 3 on #111: the warn-tier rules below all report zero findings
+		// against the current tree, so promoting them is free today and locks in
+		// the clean state. Promoting later, once findings have accumulated, is
+		// much harder. If any of these ever goes non-zero, that is a real
+		// regression, not a reason to demote it.
+
+		// Dependency hygiene.
+		"unused-dev-dependencies": "error",
+		"unused-optional-dependencies": "error",
+		"dev-dependencies-in-production": "error",
+		"type-only-dependencies": "error",
+		"duplicate-exports": "error",
+
+		// Component-level dead code.
+		"unused-store-members": "error",
+		"unprovided-injects": "error",
+		"unrendered-components": "error",
+		"unused-component-props": "error",
+		"unused-component-emits": "error",
+		"unused-component-inputs": "error",
+		"unused-component-outputs": "error",
+		"unused-svelte-events": "error",
+		"unused-server-actions": "error",
+		"unused-load-data-keys": "error",
+
+		// Styling drift.
+		"css-token-drift": "error",
+		"css-duplicate-block": "error",
+		"css-selector-complexity": "error",
+		"css-dead-surface": "error",
+		"css-broken-reference": "error",
+
+		// Decision 4 on #111: `private-type-leaks` stays off (its default, stated
+		// here so the choice is visible). It protects package consumers from
+		// exported signatures that reference unexported types. diffpack is an
+		// application — nothing imports it — so it is noise with no upside.
+		"private-type-leaks": "off",
+
+		// `test-only-dependencies` is deliberately left at its `warn` default and
+		// is NOT part of the Decision 3 promotion: it was the one warn-tier rule
+		// with a finding (`nitro`), now resolved by moving nitro to
+		// devDependencies. Promote it once it has been zero for a while.
+	},
+}
