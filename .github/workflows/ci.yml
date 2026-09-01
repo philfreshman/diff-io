@@ -107,7 +107,7 @@ jobs:
 
       - name: Upload Playwright report
         if: ${{ !cancelled() }}
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v6
         with:
           name: playwright-report
           path: |
@@ -219,7 +219,7 @@ jobs:
           bunx fallow dupes --format json --quiet --save-baseline dupes-baseline.json
 
       - name: Upload per-analysis baselines
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v6
         with:
           name: fallow-baselines
           path: |
