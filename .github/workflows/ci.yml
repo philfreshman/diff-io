@@ -115,3 +115,110 @@ jobs:
             test-results/
           retention-days: 7
           if-no-files-found: ignore
+
+  # PR-scoped fallow gate: only findings the PR itself introduces can fail
+  # this job (Decision 2 on #111 — `--gate new-only`, the fallow default).
+  # A legacy backlog on files the PR does not touch does not block it; that
+  # drift is caught separately by fallow-full below.
+  fallow-audit:
+    name: fallow audit (PR gate)
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          # `audit` diffs against the PR base, which needs history beyond the
+          # single commit a shallow checkout gives it.
+          fetch-depth: 0
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+
+      - name: Cache bun install
+        uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: bun-${{ runner.os }}-${{ hashFiles('bun.lock') }}
+          restore-keys: bun-${{ runner.os }}-
+
+      - run: bun install --frozen-lockfile
+
+      - uses: fallow-rs/fallow@v3
+        with:
+          command: audit
+          gate: new-only
+
+      - uses: fallow-rs/fallow@v3
+        if: ${{ !cancelled() }}
+        with:
+          format: sarif
+
+      - uses: github/codeql-action/upload-sarif@v4
+        if: ${{ !cancelled() }}
+        with:
+          sarif_file: fallow-results.sarif
+
+  # Full-repo run on `development`, separate from the PR gate above.
+  # `--gate new-only` by design never looks at files a PR does not touch, so
+  # this is what catches drift that lands any other way (a direct push, a
+  # merge from a branch that skipped its own gate, config changes).
+  fallow-full:
+    name: fallow (full repo)
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      security-events: write
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+
+      - name: Cache bun install
+        uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: bun-${{ runner.os }}-${{ hashFiles('bun.lock') }}
+          restore-keys: bun-${{ runner.os }}-
+
+      - run: bun install --frozen-lockfile
+
+      - uses: fallow-rs/fallow@v3
+
+      - uses: fallow-rs/fallow@v3
+        if: ${{ !cancelled() }}
+        with:
+          format: sarif
+
+      - uses: github/codeql-action/upload-sarif@v4
+        if: ${{ !cancelled() }}
+        with:
+          sarif_file: fallow-results.sarif
+
+      # Committed (not under the gitignored `.fallow/`) so CI and a local
+      # `--baseline` run agree, per the fallow README's CI guidance.
+      - name: Save per-analysis baselines
+        run: |
+          bunx fallow dead-code --format json --quiet --save-baseline dead-code-baseline.json
+          bunx fallow health --format json --quiet --save-baseline health-baseline.json
+          bunx fallow dupes --format json --quiet --save-baseline dupes-baseline.json
+
+      - name: Commit updated baselines
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add dead-code-baseline.json health-baseline.json dupes-baseline.json
+          if git diff --cached --quiet; then
+            echo "Baselines unchanged"
+          else
+            git commit -m "chore(fallow): update baselines"
+            git push
+          fi

@@ -1,3 +1,14 @@
-bun run typecheck && \
- bun run lint && \
- bun run format
+set -e
+
+bun run typecheck
+bun run lint
+bun run format
+bun run test
+
+UPSTREAM="$(git rev-parse --abbrev-ref --symbolic-full-name '@{upstream}' 2>/dev/null || true)"
+if [ -n "$UPSTREAM" ]; then
+  BASE="$(git merge-base "$UPSTREAM" HEAD 2>/dev/null || echo "$UPSTREAM")"
+else
+  BASE="development"
+fi
+bunx fallow audit --base "$BASE" --quiet --gate-marker pre-commit

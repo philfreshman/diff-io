@@ -101,27 +101,58 @@ The Rust engine has its own tests, which no `bun` script runs — they compile f
 cd wasm/diff-wasm && cargo test
 ```
 
-The pre-commit hook runs `typecheck`, `lint` and `format` — **not** the tests. Run them yourself,
-or let CI.
+### The pre-commit hook
+
+`.husky/pre-commit` runs, in order: `typecheck`, `lint`, `format`, `test`, then
+[`fallow audit`](https://fallow.tools) scoped to what your branch changed against its upstream (or
+`development` if it has none). Measured on this repo: typecheck ~2.1s, lint ~1.4s, format ~0.1s,
+test ~0.3s, `fallow audit` ~1.4s warm — about 5.3s total.
+
+`fallow audit --gate new-only` (the default, and what the hook passes) only blocks findings **your
+change introduces** — unused exports, new complexity, duplication, and the rest of what
+`.fallowrc.jsonc` enables. Findings already on `development` in files you did not touch do not
+block you.
+
+**`fallow audit` analyzes the working tree, not the index.** If you `git add` part of a file and
+leave the rest unstaged, the hook can still fail on the unstaged code, because it looks at what is
+on disk, not what `git commit` is about to record. This is inherent to how `--base` diffing works
+and is not configurable — stage the whole file, or `git stash --keep-index` before committing if
+you need to test the staged-only state.
+
+`git commit --no-verify` skips the entire hook, tests included. It is a legitimate escape hatch
+when you know the hook is wrong for your situation — e.g. a WIP commit on a scratch branch you will
+squash, or a `fallow` false positive you are about to fix in the next commit anyway — but it is not
+a way around a finding you disagree with; open an issue or adjust `.fallowrc.jsonc` instead. Claude
+Code commits are gated separately (`.claude/hooks/fallow-gate.sh`, installed via
+`fallow hooks install --target agent`) and cannot reach for `--no-verify` to bypass it.
 
 ### CI
 
 `.github/workflows/ci.yml` runs on every pull request to `development` and on every push to it, in
-two jobs:
+four jobs:
 
 | Job | Runs | Needs |
 | :--- | :--- | :--- |
 | `typecheck, lint, unit tests` | `typecheck`, `lint`, `format`, `test` | bun only |
 | `end-to-end` | `cargo test`, `build:wasm`, `check:wasm-types`, `test:e2e` | bun + Rust + Chromium |
+| `fallow audit (PR gate)` | `fallow audit --gate new-only`, SARIF upload | bun, PRs only |
+| `fallow (full repo)` | full-repo `fallow`, SARIF upload, baseline commit | bun, pushes to `development` only |
 
-They are split so a broken type or a failing unit test goes red in under a minute rather than
-behind a wasm compile. The first job deliberately never builds the wasm, which makes it the
+The first two are split so a broken type or a failing unit test goes red in under a minute rather
+than behind a wasm compile. The first job deliberately never builds the wasm, which makes it the
 enforcement of the toolchain-less smoke test above: a `typecheck` that starts needing
 `wasm/diff-wasm/pkg/` fails there.
 
 `check:wasm-types` runs only in CI, because it is the one place both the checked-in declaration and
 the generated `pkg/` exist at once. On an e2e failure the Playwright HTML report and traces are
 uploaded as a `playwright-report` artifact on the run.
+
+The two `fallow` jobs mirror the pre-commit hook's `--gate new-only` behavior on PRs and add a
+full-repo run on `development` itself, which catches drift on files no PR touched — something
+`--gate new-only` will never do, by design. That job also re-saves the per-analysis baseline files
+(`dead-code-baseline.json`, `health-baseline.json`, `dupes-baseline.json`) committed at the repo
+root, so a local `fallow --baseline` run stays in agreement with CI. These jobs exist to catch a PR
+opened with `--no-verify`, which skips the local hook entirely.
 
 ## Development Workflow
 
