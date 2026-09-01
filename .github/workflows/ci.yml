@@ -84,6 +84,13 @@ jobs:
         with:
           workspaces: wasm/diff-wasm
 
+      # The engine's own tests, which no `bun` script runs: they compile for the
+      # host rather than for `wasm32`, so they are neither `bun run test` nor
+      # anything the e2e suite exercises.
+      - name: Rust engine tests
+        run: cargo test
+        working-directory: wasm/diff-wasm
+
       - run: bun run build:wasm
 
       # `tsc` reads the checked-in declaration and Vite reads the generated

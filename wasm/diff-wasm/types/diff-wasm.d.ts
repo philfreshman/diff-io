@@ -34,11 +34,13 @@ export function build_diff_tree_for_package(
 	from: string,
 	to: string,
 	similarity_threshold: number,
+	ignore_whitespace: boolean,
 ): Promise<any>;
 
 export function get_diff_for_path(
 	filename: string,
-	old_path?: string | null,
+	old_path: string | null | undefined,
+	ignore_whitespace: boolean,
 ): any;
 
 export function prefetch_package(

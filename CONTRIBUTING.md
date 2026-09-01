@@ -94,6 +94,13 @@ bun run preview                                       # or point at a server you
 BASE_URL=http://localhost:4321 bunx playwright test    # running, and skip the rebuild
 ```
 
+The Rust engine has its own tests, which no `bun` script runs — they compile for the host, not for
+`wasm32`, and are the fastest way to pin what a diff renders:
+
+```bash
+cd wasm/diff-wasm && cargo test
+```
+
 The pre-commit hook runs `typecheck`, `lint` and `format` — **not** the tests. Run them yourself,
 or let CI.
 
@@ -105,7 +112,7 @@ two jobs:
 | Job | Runs | Needs |
 | :--- | :--- | :--- |
 | `typecheck, lint, unit tests` | `typecheck`, `lint`, `format`, `test` | bun only |
-| `end-to-end` | `build:wasm`, `check:wasm-types`, `test:e2e` | bun + Rust + Chromium |
+| `end-to-end` | `cargo test`, `build:wasm`, `check:wasm-types`, `test:e2e` | bun + Rust + Chromium |
 
 They are split so a broken type or a failing unit test goes red in under a minute rather than
 behind a wasm compile. The first job deliberately never builds the wasm, which makes it the
