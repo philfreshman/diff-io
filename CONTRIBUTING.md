@@ -75,7 +75,46 @@ bun run test:e2e    # Playwright — drives the real app against the real regist
 The e2e suite downloads real archives, so it is slow and needs a network. It is the only place the
 WebAssembly actually runs, which is why the coverage lives there rather than in mocked unit tests.
 
-The pre-commit hook runs `typecheck`, `lint` and `format` — **not** the tests. Run them yourself.
+`test:e2e` builds and serves the app itself — a **production** build, never `vite dev`. Three
+defects have reached `development` past a green dev-only run (`7bd9d90`), so the build is part of
+the command rather than a prerequisite you might forget. That means it needs the Rust toolchain,
+and that each run pays for a rebuild (about a second once cargo is warm).
+
+It also serves with `--strictPort`, and that is not a detail. Left to itself `vite preview` shrugs
+at a busy port and moves to the next one while Playwright goes on polling the original — so the
+suite runs green or red against **whatever else is answering there**, which in a repo worked on in
+several worktrees at once is somebody else's build. It has to die instead.
+
+Two ways to keep out of another worktree's way:
+
+```bash
+PORT=4399 bun run test:e2e                            # serve somewhere else entirely
+
+bun run preview                                       # or point at a server you are already
+BASE_URL=http://localhost:4321 bunx playwright test    # running, and skip the rebuild
+```
+
+The pre-commit hook runs `typecheck`, `lint` and `format` — **not** the tests. Run them yourself,
+or let CI.
+
+### CI
+
+`.github/workflows/ci.yml` runs on every pull request to `development` and on every push to it, in
+two jobs:
+
+| Job | Runs | Needs |
+| :--- | :--- | :--- |
+| `typecheck, lint, unit tests` | `typecheck`, `lint`, `format`, `test` | bun only |
+| `end-to-end` | `build:wasm`, `check:wasm-types`, `test:e2e` | bun + Rust + Chromium |
+
+They are split so a broken type or a failing unit test goes red in under a minute rather than
+behind a wasm compile. The first job deliberately never builds the wasm, which makes it the
+enforcement of the toolchain-less smoke test above: a `typecheck` that starts needing
+`wasm/diff-wasm/pkg/` fails there.
+
+`check:wasm-types` runs only in CI, because it is the one place both the checked-in declaration and
+the generated `pkg/` exist at once. On an e2e failure the Playwright HTML report and traces are
+uploaded as a `playwright-report` artifact on the run.
 
 ## Development Workflow
 
@@ -117,3 +156,5 @@ Commit messages must follow this format:
 1. Ensure your code follows the existing style and passes formatting checks.
 2. Update the README.md or other documentation if your changes introduce new features or change existing ones.
 3. Submit a Pull Request with a clear description of your changes.
+4. CI must be green before it can merge. It runs the same commands the hook does, plus the tests —
+   so anything that passes locally should pass there.

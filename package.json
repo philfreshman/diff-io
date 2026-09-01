@@ -10,7 +10,7 @@
 		"dev": "vite dev --port 4321",
 		"build:wasm": "RUST_LOG=info bunx wasm-pack build --target web wasm/diff-wasm",
 		"build": "bun run build:wasm && vite build",
-		"preview": "vite preview --port 4321",
+		"preview": "vite preview --port 4321 --strictPort",
 		"generate-routes": "tsr generate",
 		"test": "bun test tests/unit",
 		"test:e2e": "playwright test",
