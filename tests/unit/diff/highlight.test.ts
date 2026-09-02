@@ -77,6 +77,19 @@ describe("highlightLine", () => {
 		expect(html).toContain("&lt;img");
 	});
 
+	test("escapes markup even when highlight.js actually marks up the line", () => {
+		// The two cases above both fall back to this file's own `escapeHtml` —
+		// no language, or a line too long to highlight. The line here is
+		// neither: it takes the `hljs.highlight` branch, and package source
+		// (npm, PyPI, crates, Go) is attacker-controlled, so this is the
+		// guarantee the two `dangerouslySetInnerHTML` call sites actually rely
+		// on. Asserted here rather than assumed.
+		const html = highlightLine("<img src=x onerror=alert(1)>", "xml");
+
+		expect(html).not.toContain("<img");
+		expect(html).toContain("&lt;");
+	});
+
 	test("leaves a line alone when the language is unknown", () => {
 		expect(highlightLine("just some prose", null)).toBe("just some prose");
 	});
