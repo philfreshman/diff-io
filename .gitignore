@@ -37,6 +37,12 @@ npm-debug.log*
 
 # fallow's cache dir
 .fallow/
+# Written by the type-aware CI step, and by anyone running it locally.
+type-aware.json
+# Written by the fallow GitHub action's SARIF step, and by anyone
+# reproducing it locally.
+fallow-results.sarif
+fallow-results.json
 
 # Misc
 *.tsbuildinfo

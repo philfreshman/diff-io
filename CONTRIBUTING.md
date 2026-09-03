@@ -133,10 +133,10 @@ four jobs:
 
 | Job | Runs | Needs |
 | :--- | :--- | :--- |
-| `typecheck, lint, unit tests` | `typecheck`, `lint`, `format`, `test` | bun only |
+| `typecheck, lint, unit tests` | `typecheck`, `lint`, `format`, `test`, `check:badge` | bun only |
 | `end-to-end` | `cargo test`, `build:wasm`, `check:wasm-types`, `test:e2e` | bun + Rust + Chromium |
-| `fallow audit (PR gate)` | `fallow audit --gate new-only`, SARIF upload | bun, PRs only |
-| `fallow (full repo)` | full-repo `fallow`, SARIF upload, baseline artifact | bun, pushes to `development` only |
+| `fallow audit (PR gate)` | `fallow audit --gate new-only`, `fallow security --gate newly-reachable`, SARIF upload | bun, PRs only |
+| `fallow (full repo)` | full-repo `fallow`, the type-aware pass, the health grade, SARIF upload, baseline artifact | bun, pushes to `development` only |
 
 The first two are split so a broken type or a failing unit test goes red in under a minute rather
 than behind a wasm compile. The first job deliberately never builds the wasm, which makes it the
@@ -157,6 +157,80 @@ trigger the checks that would clear it either. To refresh the checked-in baselin
 artifact from the latest `development` run (or regenerate them locally with the same three
 `--save-baseline` commands) and open a normal PR. These jobs exist to catch a PR opened with
 `--no-verify`, which skips the local hook entirely.
+
+### What `fallow` enforces here
+
+`.fallowrc.jsonc` is commented line by line — every exception it holds says why it exists, and a new
+one is expected to do the same. Four things in it are worth knowing before you hit them.
+
+**Architecture boundaries.** `src/` is three zones, and imports only run downhill:
+
+```
+routes  →  components  →  lib
+```
+
+`src/lib/**` may import from neither of the other two. That is the rule with teeth: `lib` is the
+part of this codebase that is pure and unit-tested — URL parsing, the registry adapters, the diff
+parser, the worker client, the storage prefs — and one import of a component from there is every
+one of those tests needing a DOM. Nothing had to be refactored to turn this on; it was already true,
+and now it cannot quietly stop being.
+
+Every file under `src/` must belong to a zone, so a new top-level directory there is a finding
+rather than a silent exemption — decide which layer it is, or add it to `coverage.allowUnmatched`
+with a reason. Before editing:
+
+```bash
+bunx fallow guard src/lib/registries/npm.ts   # which rules apply to this file
+bunx fallow list --boundaries                 # the zones, and how many files each holds
+```
+
+**House rules.** `rule-packs/diffpack-policy.jsonc` holds two, both currently at zero:
+
+- `localStorage` is reachable only from the module that owns the key. The six key names are a
+  compatibility contract with returning visitors (see CLAUDE.md); they survive only while every read
+  and write goes through the module the e2e suite imports the constant from. The rule is scoped to
+  `src/**` — `tests/e2e/` and `scripts/` drive the *browser's* storage through `page.evaluate`,
+  which is a fixture, not a preference read.
+- Registry adapters take the injected `Fetcher` rather than calling the global `fetch`, which is
+  what keeps `tests/unit/registries/` able to run without a network.
+
+```bash
+bunx fallow rule-pack test rule-packs/diffpack-policy.jsonc
+```
+
+**Security candidates.** `bunx fallow security` is a separate, opt-in surface — its findings never
+appear under bare `fallow` or in the audit gate. The candidates standing on `development` are
+triaged once, with evidence, in [docs/security-candidates.md](docs/security-candidates.md); CI fails
+a PR that makes a *new* one reachable from an entry point (`--gate newly-reachable`, not
+`--gate new` — the latter also fires when an existing sink's ranking moves, which the triage test
+itself caused). If that step goes red, either fix the sink or add a row to that file.
+
+**The type-aware pass** (`--type-aware`) runs in CI only, on pushes to `development`. It is the
+semantic answer to a question the syntactic pass can only guess at — whether an export really has no
+consumers — so it has work to do exactly when something is not clean, and reports `executed: false`
+otherwise. It is deliberately not in the pre-commit hook: the hook's whole argument is that it stays
+around five seconds. Locally:
+
+```bash
+bunx fallow dead-code --type-aware --symbol-impact src/lib/theme.ts:THEME_STORAGE_KEY
+```
+
+**The health grade** is the badge at the top of the README, and it is a committed SVG rather than a
+service call — `fallow health --format badge` emits the image itself, not a shields.io URL. So it
+can go stale, and something has to notice: `bun run check:badge` regenerates the badge and diffs it
+against the committed one, and it runs in the `typecheck, lint, unit tests` job. That is the same
+contract `check:wasm-types` already holds for the wasm declaration.
+
+It cannot be refreshed by CI on your behalf — pushes from a workflow to `development` are rejected
+by its own required checks, which is the wall the baselines above already hit. So when a change
+moves the score, the fix is one command:
+
+```bash
+bun run badge   # then commit .github/badges/fallow-health.svg
+```
+
+The same grade, with the per-threshold detail behind it, is also written to the job summary of every
+`fallow (full repo)` run. Locally: `bunx fallow health --format github-summary`.
 
 ## Development Workflow
 
