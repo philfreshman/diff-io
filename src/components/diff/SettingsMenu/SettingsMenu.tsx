@@ -1,5 +1,5 @@
 import { NavigationMenu } from "@base-ui/react/navigation-menu";
-import { useHighlightTheme } from "#/components/diff/useHighlightTheme.ts";
+import type { HighlightThemeControls } from "#/components/diff/useHighlightTheme.ts";
 import {
 	CheckIcon,
 	ChevronRightIcon,
@@ -12,6 +12,12 @@ export interface SettingsMenuProps {
 	/** Whether a line that differs only in whitespace counts as a change. */
 	ignoreWhitespace: boolean;
 	onIgnoreWhitespaceChange(ignore: boolean): void;
+	/**
+	 * Which theme the code is coloured with. Held above the toolbar rather than
+	 * here: the viewer takes its own surfaces from the same choice, and two
+	 * copies of the hook would be two answers to one question.
+	 */
+	highlight: HighlightThemeControls;
 }
 
 /**
@@ -26,9 +32,8 @@ export interface SettingsMenuProps {
 export function SettingsMenu({
 	ignoreWhitespace,
 	onIgnoreWhitespaceChange,
+	highlight,
 }: SettingsMenuProps) {
-	const highlight = useHighlightTheme();
-
 	return (
 		<NavigationMenu.Root className={styles.root} orientation="vertical">
 			<NavigationMenu.List className={styles.list}>

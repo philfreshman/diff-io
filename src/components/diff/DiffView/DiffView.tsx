@@ -8,6 +8,7 @@ import { SplitDiffRow } from "#/components/diff/SplitDiffRow/SplitDiffRow.tsx";
 import { stepDifference as nextDifference } from "#/lib/diff/changes.ts";
 import type { Expander } from "#/lib/diff/computeVisibility.ts";
 import { gutterChars } from "#/lib/diff/gutter.ts";
+import type { HighlightAppearance } from "#/lib/diff/highlightThemes.ts";
 import type { FileView } from "#/lib/diff/viewMemory.ts";
 import type { FileDiff } from "#/lib/worker/protocol.ts";
 import styles from "./DiffView.module.css";
@@ -40,6 +41,12 @@ export interface DiffViewProps {
 	pending?: boolean;
 	/** How the toolbar's difference arrows reach the scroller. */
 	ref?: Ref<DiffViewHandle>;
+	/**
+	 * The ground the syntax theme paints on, or `null` before it has been read.
+	 * Everything the viewer colours itself follows this rather than the page
+	 * theme — see `data-syntax` below.
+	 */
+	syntax: HighlightAppearance | null;
 }
 
 /**
@@ -66,6 +73,7 @@ export function DiffView({
 	onClose,
 	pending,
 	ref,
+	syntax,
 }: DiffViewProps) {
 	const { lines, language, rows, markers, stops } = useDiffModel(
 		path,
@@ -131,6 +139,14 @@ export function DiffView({
 			// What the file was taken to be written in — the one decision the
 			// colouring of every row follows from.
 			data-language={language ?? ""}
+			// Whether the syntax theme paints on a light ground or a dark one.
+			// The added and removed washes, the gutters and the frame are keyed
+			// off this rather than off the page theme: a light theme colours its
+			// tokens for a white page, and reading them over the page's dark
+			// surfaces gave a file of alternately light and dark lines (#139).
+			// Absent until the stored choice has been read, which leaves the
+			// page theme's own surfaces standing — what they were before.
+			data-syntax={syntax ?? undefined}
 			style={
 				{
 					"--gutter-width": `calc(${gutterChars(lines)}ch + var(--space-4))`,
