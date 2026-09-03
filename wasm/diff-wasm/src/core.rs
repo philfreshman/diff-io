@@ -106,8 +106,13 @@ impl DiffTreeBuilder {
         let renames = self.detect_renames_optimized(&deleted, &added);
 
         // 3. Build tree structure
-        let tree =
-            self.build_tree_structure(&from_paths, &to_paths, &self.from_dirs, &self.to_dirs);
+        let tree = self.build_tree_structure(
+            &from_paths,
+            &to_paths,
+            &self.from_dirs,
+            &self.to_dirs,
+            &renames,
+        );
 
         // 4. Compute statuses and counts
         self.compute_tree_stats(tree, &renames)
@@ -296,7 +301,13 @@ impl DiffTreeBuilder {
         to_paths: &HashSet<String>,
         from_dirs: &HashSet<String>,
         to_dirs: &HashSet<String>,
+        renames: &HashMap<String, String>,
     ) -> DiffFileEntry {
+        // A rename's source path is not a file of its own: the new path stands
+        // for both halves, carrying `oldPath` and the diff between them. Left
+        // in, it is the same file a second time, listed as a deletion.
+        let renamed_away: HashSet<&String> = renames.values().collect();
+
         // Merge all paths
         let mut all_paths = HashSet::new();
         all_paths.extend(from_paths.iter().cloned());
@@ -308,7 +319,7 @@ impl DiffTreeBuilder {
         let mut children_map: HashMap<String, Vec<String>> = HashMap::new();
 
         for path in &all_paths {
-            if path == "/" {
+            if path == "/" || renamed_away.contains(path) {
                 continue;
             }
             let file_type = self.resolve_file_type(path, from_dirs, to_dirs);
@@ -397,6 +408,15 @@ impl DiffTreeBuilder {
             };
 
             let nested = Self::build_children(&child_path, nodes, children_map);
+
+            // A directory with nothing under it is not a change anyone can
+            // read — and after a rename out of it, that is exactly what its
+            // former home is left as. Pruning bottom-up, an emptied chain of
+            // directories goes with it.
+            if matches!(node.file_type, FileType::Directory) && nested.is_empty() {
+                continue;
+            }
+
             node.children = Some(nested);
             children.push(node);
         }
@@ -638,6 +658,74 @@ mod tests {
 
     fn one_file(content: &str) -> HashMap<String, FileMapEntry> {
         HashMap::from([("a.rs".to_string(), file(content))])
+    }
+
+    fn files(entries: &[(&str, &str)]) -> HashMap<String, FileMapEntry> {
+        entries
+            .iter()
+            .map(|(path, content)| ((*path).to_string(), file(content)))
+            .collect()
+    }
+
+    /// Every file in the tree, in tree order — the list the panel renders.
+    fn listed_files(node: &DiffFileEntry) -> Vec<&DiffFileEntry> {
+        if matches!(node.file_type, FileType::File) {
+            return vec![node];
+        }
+
+        node.children
+            .as_ref()
+            .map(|children| children.iter().flat_map(listed_files).collect())
+            .unwrap_or_default()
+    }
+
+    fn paths(node: &DiffFileEntry) -> Vec<&str> {
+        listed_files(node)
+            .iter()
+            .map(|entry| entry.path.as_str())
+            .collect()
+    }
+
+    /// Every node in the tree, directories included, in tree order.
+    fn all_paths(node: &DiffFileEntry) -> Vec<&str> {
+        let mut out = vec![node.path.as_str()];
+        for child in node.children.iter().flatten() {
+            out.extend(all_paths(child));
+        }
+        out
+    }
+
+    /// Long enough that a one-line edit still reads as the same file to the
+    /// rename detector, which is what a renamed-and-touched file looks like.
+    const REPORTER: &str = "import { a } from './a';\nimport { b } from './b';\n\nexport function report(x) {\n  const y = a(x);\n  const z = b(y);\n  return z + 1;\n}\n\nexport default report;\n";
+    const REPORTER_EDITED: &str = "import { a } from './a';\nimport { b } from './b';\n\nexport function report(x) {\n  const y = a(x);\n  const z = b(y);\n  return z + 2;\n}\n\nexport default report;\n";
+
+    #[test]
+    fn a_renamed_file_is_listed_once_at_its_new_path() {
+        let tree = build_diff_tree(
+            files(&[("src/reporter.ts", REPORTER)]),
+            files(&[("src/report.ts", REPORTER_EDITED)]),
+            0.75,
+            false,
+        );
+
+        assert_eq!(paths(&tree), ["src/report.ts"]);
+
+        let entry = listed_files(&tree)[0];
+        assert!(matches!(entry.status, DiffStatus::Renamed));
+        assert_eq!(entry.old_path.as_deref(), Some("src/reporter.ts"));
+    }
+
+    #[test]
+    fn a_rename_out_of_a_directory_leaves_no_empty_directory_behind() {
+        let tree = build_diff_tree(
+            files(&[("src/legacy/reporter.ts", REPORTER)]),
+            files(&[("src/reporter.ts", REPORTER_EDITED)]),
+            0.75,
+            false,
+        );
+
+        assert_eq!(all_paths(&tree), ["/", "src", "src/reporter.ts"]);
     }
 
     #[test]

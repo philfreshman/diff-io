@@ -53,6 +53,12 @@ jobs:
 
       - run: bun run test
 
+      # The README's health badge is a committed SVG, so it can go stale
+      # silently — unless something notices. This is that something, and it is
+      # the same contract `check:wasm-types` holds for the wasm declaration.
+      # When it fails: `bun run badge`, and commit the result.
+      - run: bun run check:badge
+
   e2e:
     name: end-to-end
     runs-on: ubuntu-latest
@@ -152,6 +158,41 @@ jobs:
           command: audit
           gate: new-only
 
+      # Phase 7 on #111. `fallow security` is an opt-in surface: its findings
+      # never appear under bare `fallow` or in the audit gate above, so without
+      # this step a PR could add a new `dangerouslySetInnerHTML` or a new
+      # unconstrained fetch and nothing would say so.
+      #
+      # `--gate newly-reachable`, not `--gate new`. Both fail only on something
+      # the PR brings; the difference is what counts as new. `new` fires on any
+      # candidate appearing on a changed line, which includes an existing sink
+      # whose *ranking* moved — and that is not hypothetical. Adding
+      # `tests/unit/registries/outboundOrigins.test.ts`, whose entire purpose is
+      # to prove the two `http.ts` SSRF sinks safe, raised them from `low` to
+      # `medium`: fallow's taint model reads a spec full of hostile-looking URLs
+      # as a module receiving untrusted input and traces it two import hops into
+      # the sink. `--gate new` went red on the file that closed the finding.
+      #
+      # `newly-reachable` asks the question that survives that: did a candidate
+      # become runtime-reachable from an entry point in head that was not
+      # reachable in base? A genuinely new sink does — verified with a probe
+      # `dangerouslySetInnerHTML` in `NotFound.tsx`, which fails this step — and
+      # a re-ranked existing one does not.
+      #
+      # The standing eight are triaged in `docs/security-candidates.md` and
+      # deliberately do not block; fallow has no `--gate all` here, on the
+      # grounds that gating a whole backlog is how a gate gets ignored. When
+      # this step fails, either fix the sink or add a row to that file.
+      #
+      # The base SHA rather than `origin/<base_ref>`: `fetch-depth: 0` above
+      # guarantees the commit is in history, which is all `--changed-since`
+      # needs, and it does not depend on how checkout arranged its remote refs.
+      - name: fallow security (newly reachable candidates)
+        run: >
+          bunx fallow security
+          --gate newly-reachable
+          --changed-since ${{ github.event.pull_request.base.sha }}
+
       - uses: fallow-rs/fallow@v3
         if: ${{ !cancelled() }}
         with:
@@ -192,6 +233,45 @@ jobs:
       - run: bun install --frozen-lockfile
 
       - uses: fallow-rs/fallow@v3
+
+      # Phase 7 on #111: the optional TypeScript semantic pass, here and
+      # nowhere else. It is what settles a dead-code candidate that the
+      # syntactic pass can only guess at — whether an export really has no
+      # consumers — so it has work to do exactly when the tree is not clean;
+      # on a clean tree it reports `executed: false` and costs nothing.
+      #
+      # CI only, never the pre-commit hook: the hook's whole argument is that
+      # it stays under about five seconds, and this is a second TypeScript
+      # program load. `best-effort` (set in `.fallowrc.jsonc`) keeps an
+      # incomplete semantic answer advisory rather than failing the job — the
+      # companion is an optional dependency of `fallow`, and a runner that
+      # resolves it differently should not turn CI red.
+      #
+      # `_meta.type_aware` goes to the job summary because "inspect the meta
+      # block" is otherwise a thing nobody does. It says whether the pass ran,
+      # what it adjudicated, and why it abstained where it did.
+      - name: fallow dead-code (type-aware)
+        run: |
+          # The summary is written either way: a red step is the most
+          # interesting time to be able to read why the pass abstained.
+          set +e
+          bunx fallow dead-code --type-aware --format json --quiet > type-aware.json
+          status=$?
+          set -e
+          {
+            echo '## fallow type-aware'
+            echo '```json'
+            jq '._meta.type_aware' type-aware.json
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          exit $status
+
+      # The same grade the README badge carries, rendered on the run page with
+      # the per-threshold detail behind it. The badge is the number; this is
+      # why the number is what it is.
+      - name: Publish the health grade
+        if: ${{ !cancelled() }}
+        run: bunx fallow health --format github-summary >> "$GITHUB_STEP_SUMMARY"
 
       - uses: fallow-rs/fallow@v3
         if: ${{ !cancelled() }}

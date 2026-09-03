@@ -6,6 +6,8 @@ import type { DiffViewHandle } from "#/components/diff/DiffView/DiffView.tsx";
 import { DiffView } from "#/components/diff/DiffView/DiffView.tsx";
 import type { DiffViewControls } from "#/components/diff/useDiffView.ts";
 import { useDiffView } from "#/components/diff/useDiffView.ts";
+import type { HighlightThemeControls } from "#/components/diff/useHighlightTheme.ts";
+import { useHighlightTheme } from "#/components/diff/useHighlightTheme.ts";
 import { useIgnoreWhitespace } from "#/components/diff/useIgnoreWhitespace.ts";
 import { TreePanel } from "#/components/tree/TreePanel/TreePanel.tsx";
 import { Spinner } from "#/components/ui/Spinner/Spinner.tsx";
@@ -42,6 +44,10 @@ export function DiffWorkspace({ slug }: { slug: DiffSlug }) {
 	const adapter = requireAdapter(slug.registry);
 	const navigate = useNavigate();
 	const whitespace = useIgnoreWhitespace();
+	// Held here rather than in the gear that changes it: the viewer takes its
+	// own surfaces from the same choice, and a second copy of the hook would be
+	// a second answer to one question.
+	const highlight = useHighlightTheme();
 	const session = useDiffSession(slug, whitespace.ignore);
 	const files = flattenFiles(session.tree);
 	// The files the toolbar's arrows walk: the unchanged ones are what the tree
@@ -135,9 +141,11 @@ export function DiffWorkspace({ slug }: { slug: DiffSlug }) {
 							onSplitChange={viewer.setSplit}
 							ignoreWhitespace={whitespace.ignore === true}
 							onIgnoreWhitespaceChange={whitespace.set}
+							highlight={highlight}
 						/>
 						<FilePane
 							file={session.file}
+							highlight={highlight}
 							onClose={closeFile}
 							ref={view}
 							sessionStatus={session.status}
@@ -189,6 +197,8 @@ interface FilePaneProps {
 	onClose(): void;
 	/** How the toolbar's difference arrows reach the viewer's scroller. */
 	ref: Ref<DiffViewHandle>;
+	/** Which theme the code is coloured with, and on what ground. */
+	highlight: HighlightThemeControls;
 }
 
 /**
@@ -202,6 +212,7 @@ function FilePane({
 	viewer,
 	onClose,
 	ref,
+	highlight,
 }: FilePaneProps) {
 	return (
 		<>
@@ -231,6 +242,7 @@ function FilePane({
 					pending={file?.status === "loading"}
 					ref={ref}
 					split={viewer.split}
+					syntax={highlight.appearance}
 					view={viewer.view}
 				/>
 			)}

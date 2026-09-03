@@ -1,0 +1,53 @@
+{
+	"$schema": "https://raw.githubusercontent.com/fallow-rs/fallow/main/rule-pack-schema.json",
+	"version": 1,
+	"name": "diffpack",
+	"description": "Two invariants this codebase already holds, written down so they keep holding. Both report as policy-violation findings; both are at zero today.",
+	"rules": [
+		// CLAUDE.md calls the six localStorage key names "a contract with
+		// returning visitors": renaming one silently drops the settings of
+		// everybody who already has it. That contract survives only while every
+		// read and write of a key goes through the one module that owns it — the
+		// module the e2e suite imports the constant from. A component reaching
+		// for `localStorage` directly is how a seventh key, or a second spelling
+		// of an existing one, gets in without anyone noticing.
+		//
+		// Scoped to `src/**` on purpose. `tests/e2e/**` and
+		// `scripts/capture-screenshots.mjs` drive the *browser's* localStorage
+		// through `page.evaluate` to set up a fixture; that is not a preference
+		// read, and parity.spec.ts exists precisely to address those keys from
+		// the outside.
+		{
+			"id": "storage-keys-belong-to-the-storage-layer",
+			"kind": "banned-call",
+			"callees": ["localStorage.*"],
+			"files": ["src/**"],
+			"exclude": [
+				"src/lib/theme.ts",
+				"src/lib/themeScript.ts",
+				"src/lib/tree/prefs.ts",
+				"src/lib/tree/widthScript.ts",
+				"src/lib/diff/prefs.ts",
+				"src/lib/diff/highlightThemes.ts",
+				"src/lib/storage/searchHistory.ts"
+			],
+			"message": "Read and write preferences through the module that owns the key (src/lib/**/prefs.ts, theme.ts, highlightThemes.ts, storage/searchHistory.ts). The key names are a compatibility contract — see CLAUDE.md.",
+			"severity": "error"
+		},
+
+		// `Fetcher` in src/lib/registries/types.ts is documented as "the one
+		// system boundary in this layer: injected so adapters stay testable".
+		// Every adapter takes it as a parameter and every unit test passes
+		// `stubFetch` in its place. An adapter that calls the global `fetch`
+		// instead is untestable without a network, and the whole
+		// tests/unit/registries suite quietly stops covering it.
+		{
+			"id": "registry-adapters-use-the-injected-fetcher",
+			"kind": "banned-call",
+			"callees": ["fetch"],
+			"files": ["src/lib/registries/**"],
+			"message": "Take the `Fetcher` as a parameter instead of calling the global `fetch`, so the adapter stays testable with `stubFetch`.",
+			"severity": "error"
+		}
+	]
+}

@@ -19,69 +19,150 @@ export interface HighlightTheme {
 	 * theme highlight.js does not ship.
 	 */
 	asset: string;
+	/**
+	 * Whether the stylesheet paints the code on a light ground or a dark one —
+	 * the `.hljs` background it sets, which the viewer's own frame then has to
+	 * follow. It is stated here rather than read from the stylesheet because
+	 * nothing may read a stylesheet before it has to be chosen; the unit suite
+	 * checks each of these against the file it names.
+	 */
+	appearance: HighlightAppearance;
 }
 
+/** A theme's ground, in the same two words the page theme uses. */
+export type HighlightAppearance = ResolvedTheme;
+
 export const HIGHLIGHT_THEMES: readonly HighlightTheme[] = [
-	{ value: "base16/3024", label: "3024", asset: "base16/3024.css" },
+	{
+		value: "base16/3024",
+		label: "3024",
+		asset: "base16/3024.css",
+		appearance: "dark",
+	},
 	{
 		value: "atom-one-dark",
 		label: "Atom One Dark",
 		asset: "atom-one-dark.css",
+		appearance: "dark",
 	},
 	{
 		value: "atom-one-light",
 		label: "Atom One Light",
 		asset: "atom-one-light.css",
+		appearance: "light",
 	},
-	{ value: "default", label: "Default", asset: "default.css" },
-	{ value: "base16/dracula", label: "Dracula", asset: "base16/dracula.css" },
-	{ value: "base16/github", label: "GitHub", asset: "base16/github.css" },
-	{ value: "github-dark", label: "GitHub Dark", asset: "github-dark.css" },
+	{
+		value: "default",
+		label: "Default",
+		asset: "default.css",
+		appearance: "light",
+	},
+	{
+		value: "base16/dracula",
+		label: "Dracula",
+		asset: "base16/dracula.css",
+		appearance: "dark",
+	},
+	{
+		value: "base16/github",
+		label: "GitHub",
+		asset: "base16/github.css",
+		appearance: "light",
+	},
+	{
+		value: "github-dark",
+		label: "GitHub Dark",
+		asset: "github-dark.css",
+		appearance: "dark",
+	},
 	{
 		value: "github-dark-dimmed",
 		label: "GitHub Dark Dimmed",
 		asset: "github-dark-dimmed.css",
+		appearance: "dark",
 	},
-	{ value: "material", label: "Material", asset: "base16/material.css" },
-	{ value: "monokai", label: "Monokai", asset: "monokai.css" },
+	{
+		value: "material",
+		label: "Material",
+		asset: "base16/material.css",
+		appearance: "dark",
+	},
+	{
+		value: "monokai",
+		label: "Monokai",
+		asset: "monokai.css",
+		appearance: "dark",
+	},
 	{
 		value: "monokai-sublime",
 		label: "Monokai Sublime",
 		asset: "monokai-sublime.css",
+		appearance: "dark",
 	},
-	{ value: "night-owl", label: "Night Owl", asset: "night-owl.css" },
+	{
+		value: "night-owl",
+		label: "Night Owl",
+		asset: "night-owl.css",
+		appearance: "dark",
+	},
 	// Not a highlight.js theme: ours, served from `public/`.
-	{ value: "nightfall", label: "Nightfall", asset: "/nightfall.css" },
-	{ value: "nord", label: "Nord", asset: "nord.css" },
-	{ value: "onedark", label: "One Dark", asset: "base16/onedark.css" },
+	{
+		value: "nightfall",
+		label: "Nightfall",
+		asset: "/nightfall.css",
+		appearance: "dark",
+	},
+	{ value: "nord", label: "Nord", asset: "nord.css", appearance: "dark" },
+	{
+		value: "onedark",
+		label: "One Dark",
+		asset: "base16/onedark.css",
+		appearance: "dark",
+	},
 	{
 		value: "stackoverflow-dark",
 		label: "Stack Overflow Dark",
 		asset: "stackoverflow-dark.css",
+		appearance: "dark",
 	},
 	{
 		value: "stackoverflow-light",
 		label: "Stack Overflow Light",
 		asset: "stackoverflow-light.css",
+		appearance: "light",
 	},
 	{
 		value: "solarized-light",
 		label: "Solarized Light",
 		asset: "base16/solarized-light.css",
+		appearance: "light",
 	},
 	{
 		value: "solarized-dark",
 		label: "Solarized Dark",
 		asset: "base16/solarized-dark.css",
+		appearance: "dark",
 	},
 	{
 		value: "tokyo-night-dark",
 		label: "Tokyo Night Dark",
 		asset: "tokyo-night-dark.css",
+		appearance: "dark",
 	},
-	{ value: "vs", label: "VS", asset: "vs.css" },
-	{ value: "vs2015", label: "VS 2015", asset: "vs2015.css" },
-	{ value: "windows-95", label: "Windows 95", asset: "base16/windows-95.css" },
+	{ value: "vs", label: "VS", asset: "vs.css", appearance: "light" },
+	{
+		value: "vs2015",
+		label: "VS 2015",
+		asset: "vs2015.css",
+		appearance: "dark",
+	},
+	// Named for the era, not the ground: its `.hljs` background is black.
+	{
+		value: "windows-95",
+		label: "Windows 95",
+		asset: "base16/windows-95.css",
+		appearance: "dark",
+	},
 ];
 
 /**
@@ -107,6 +188,21 @@ export function parseHighlightTheme(
 	const chosen = HIGHLIGHT_THEMES.find((it) => it.value === raw);
 
 	return chosen ? chosen.value : defaultHighlightTheme(theme);
+}
+
+/**
+ * The ground the chosen theme paints on, or `null` before one has been read.
+ *
+ * The viewer takes its own surfaces from this rather than from the page theme.
+ * A light theme's stylesheet paints the code area white and colours the tokens
+ * for it, while the added and removed washes are the page's — so a light theme
+ * under a dark page gave alternating light and dark lines with the syntax
+ * colours legible on only half of them (#139).
+ */
+export function highlightAppearance(
+	value: string | null,
+): HighlightAppearance | null {
+	return HIGHLIGHT_THEMES.find((it) => it.value === value)?.appearance ?? null;
 }
 
 /** The old app's key, so a returning visitor's theme is still theirs. */

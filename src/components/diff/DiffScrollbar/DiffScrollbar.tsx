@@ -1,13 +1,18 @@
 import type { RefObject } from "react";
+import { useChangeMarkers } from "#/components/diff/useChangeMarkers.ts";
 import { useDiffScrollbar } from "#/components/diff/useDiffScrollbar.ts";
-import type { Marker } from "#/lib/diff/scrollbar.ts";
+import type { DiffRow } from "#/lib/diff/computeVisibility.ts";
+import type { SplitRow } from "#/lib/diff/pairSplitRows.ts";
+import type { RowSpan } from "#/lib/diff/scrollbar.ts";
 import styles from "./DiffScrollbar.module.css";
 
 export interface DiffScrollbarProps {
 	/** The element the bar scrolls; it is not the bar's to own. */
 	scroller: RefObject<HTMLElement | null>;
-	/** Every change in the file, as its share of the way down it. */
-	markers: Marker[];
+	/** Every row of the file, changed or not — what the minimap marks. */
+	rows: readonly (DiffRow | SplitRow)[];
+	/** How tall each of those rows measures, as the virtualiser has it. */
+	spans: readonly RowSpan[];
 }
 
 /**
@@ -15,9 +20,14 @@ export interface DiffScrollbarProps {
  *
  * The native one cannot carry the markers, and there is nothing to gain from
  * showing both — so the scroller hides its own and this sits over it.
+ *
+ * Both halves of what it draws are worked out here, from the same file: bands
+ * that were placed by some other measure than the thumb's would point at rows
+ * the thumb never reaches.
  */
-export function DiffScrollbar({ scroller, markers }: DiffScrollbarProps) {
+export function DiffScrollbar({ scroller, rows, spans }: DiffScrollbarProps) {
 	const bar = useDiffScrollbar(scroller);
+	const markers = useChangeMarkers(rows, spans);
 
 	return (
 		<div

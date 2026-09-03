@@ -4,6 +4,7 @@ import type { SplitRow } from "#/lib/diff/pairSplitRows.ts";
 import type { DiffLine } from "#/lib/diff/parseUnifiedDiff.ts";
 import {
 	changeMarkers,
+	type RowSpan,
 	scrollForDrag,
 	scrollForTrackClick,
 	thumbMetrics,
@@ -18,6 +19,14 @@ function unified(types: DiffLine["type"][]): DiffRow[] {
 		kind: "line",
 		index,
 		line: line(type),
+	}));
+}
+
+/** What a file measures with nothing wrapped: every row one line tall. */
+function evenSpans(count: number): RowSpan[] {
+	return Array.from({ length: count }, (_, index) => ({
+		start: index,
+		end: index + 1,
 	}));
 }
 
@@ -107,12 +116,13 @@ describe("scrollForDrag", () => {
 
 describe("changeMarkers", () => {
 	test("marks a run of changed rows as one band down the file", () => {
-		// Four rows, the middle two added: one marker over the middle half of
-		// the file. The fractions are the row model's, not measured pixels —
-		// the list is virtualised, so most rows have never been rendered.
+		// Four rows of one line each, the middle two added: one marker over
+		// the middle half of the file. Which rows changed is the row model's
+		// to say — the list is virtualised, so most rows have never been
+		// rendered and the DOM could not answer.
 		const rows = unified(["unchanged", "added", "added", "unchanged"]);
 
-		expect(changeMarkers(rows)).toEqual([
+		expect(changeMarkers(rows, evenSpans(4))).toEqual([
 			{ type: "added", start: 0.25, end: 0.75 },
 		]);
 	});
@@ -132,7 +142,7 @@ describe("changeMarkers", () => {
 			},
 		];
 
-		expect(changeMarkers(rows)).toEqual([
+		expect(changeMarkers(rows, evenSpans(2))).toEqual([
 			{ type: "modified", start: 0, end: 0.5 },
 		]);
 	});
@@ -146,9 +156,33 @@ describe("changeMarkers", () => {
 			{ kind: "line", index: 9, line: line("added") },
 		];
 
-		expect(changeMarkers(rows)).toEqual([
+		expect(changeMarkers(rows, evenSpans(3))).toEqual([
 			{ type: "added", start: 0, end: 1 / 3 },
 			{ type: "added", start: 2 / 3, end: 1 },
 		]);
+	});
+
+	test("sizes a band by how tall its rows are, not how many there are", () => {
+		// A minified file: one enormous wrapped line, then a one-line change.
+		// By count the change is half the file; down the track it is the last
+		// quarter, which is where the thumb puts it.
+		const rows = unified(["unchanged", "added"]);
+		const spans = [
+			{ start: 0, end: 750 },
+			{ start: 750, end: 1000 },
+		];
+
+		expect(changeMarkers(rows, spans)).toEqual([
+			{ type: "added", start: 0.75, end: 1 },
+		]);
+	});
+
+	test("has no bands while the file measures nothing", () => {
+		// A viewer that is not on screen measures zero, and a share of a file
+		// of no height is a division by zero — which the browser draws as a
+		// band pinned to the top of the track rather than as nothing.
+		expect(changeMarkers(unified(["added"]), [{ start: 0, end: 0 }])).toEqual(
+			[],
+		);
 	});
 });
