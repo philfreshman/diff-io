@@ -75,7 +75,7 @@ export function DiffView({
 	ref,
 	syntax,
 }: DiffViewProps) {
-	const { lines, language, rows, markers, stops } = useDiffModel(
+	const { lines, language, rows, stops } = useDiffModel(
 		path,
 		file,
 		view,
@@ -96,6 +96,12 @@ export function DiffView({
 		// jump.
 		initialOffset: view.scrollTop,
 	});
+
+	// How tall the file is — and, as a side effect of asking, the virtualiser's
+	// measurements brought up to date. The scrollbar draws its minimap from
+	// those, so they are handed to it rather than to the row model, which is
+	// derived before a virtualiser exists.
+	const height = virtualizer.getTotalSize();
 
 	// Stepping through the differences is the toolbar's button and the viewer's
 	// scroller at once, so it is exposed rather than lifted: the offsets it
@@ -164,11 +170,7 @@ export function DiffView({
 					at.current = event.currentTarget.scrollTop;
 				}}
 			>
-				<table
-					className={styles.sizer}
-					aria-label={path}
-					style={{ height: virtualizer.getTotalSize() }}
-				>
+				<table className={styles.sizer} aria-label={path} style={{ height }}>
 					<tbody>
 						{virtualizer.getVirtualItems().map((item) => {
 							const row = rows[item.index];
@@ -210,7 +212,11 @@ export function DiffView({
 					</tbody>
 				</table>
 			</div>
-			<DiffScrollbar markers={markers} scroller={scroller} />
+			<DiffScrollbar
+				rows={rows}
+				scroller={scroller}
+				spans={virtualizer.measurementsCache}
+			/>
 		</div>
 	);
 }

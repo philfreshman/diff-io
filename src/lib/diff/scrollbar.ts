@@ -107,30 +107,49 @@ export interface Marker {
 	end: number;
 }
 
+/** Where a row sits in the file, in the scroller's own pixels. */
+export interface RowSpan {
+	start: number;
+	end: number;
+}
+
 /**
  * The file's changes as bands to paint down the track.
  *
- * They come from the row model rather than from the rendered rows: the list is
- * virtualised, so measuring the DOM would only ever mark the part of the file
- * already on screen — which is the part that needs no minimap.
+ * Which rows changed comes from the row model rather than from the rendered
+ * rows: the list is virtualised, so reading the DOM would only ever mark the
+ * part of the file already on screen — which is the part that needs no
+ * minimap.
+ *
+ * How far down the track each band lands comes from `spans`, the height the
+ * rows actually measure. Rows wrap, so counting them instead would put a band
+ * somewhere the thumb never goes: a minified file is a handful of rows and a
+ * whole screen of scrolling.
  */
-export function changeMarkers(rows: readonly MarkableRow[]): Marker[] {
+export function changeMarkers(
+	rows: readonly MarkableRow[],
+	spans: readonly RowSpan[],
+): Marker[] {
+	const height = spans[rows.length - 1]?.end ?? 0;
+	if (!height) return [];
+
 	const markers: Marker[] = [];
 	let open: Marker | null = null;
 
 	rows.forEach((row, index) => {
-		const type = markerType(row);
-		if (!type) {
+		const span = spans[index];
+		const type = span && markerType(row);
+		if (!span || !type) {
 			open = null;
 			return;
 		}
 
 		if (open && open.type === type) {
-			open.end = (index + 1) / rows.length;
+			open.end = span.end / height;
 			return;
 		}
 
-		open = { type, start: index / rows.length, end: (index + 1) / rows.length };
+		open = { type, start: span.start / height, end: span.end / height };
 		markers.push(open);
 	});
 
