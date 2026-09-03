@@ -115,6 +115,31 @@ test("draws only the rows on screen, however long the file", async ({
 	expect(await drawn.count()).toBeLessThan(200);
 });
 
+/**
+ * Virtualisation moves what is under a still pointer on every scroll step: a
+ * row, the stretched table behind it, a fold's padding. Left to `auto` the
+ * browser reads each of those differently and the cursor flickers, so the
+ * scroller states it and every row inherits it.
+ */
+test("keeps a text cursor over the whole file while it is scrolled", async ({
+	page,
+}) => {
+	await open(page, LODASH);
+
+	const scroller = page.getByTestId("diff-scroller");
+	const cursors = await scroller.evaluate((node) => {
+		const seen = new Set<string>();
+		for (const element of [node, ...node.querySelectorAll("*")]) {
+			// The ways of opening a fold are controls, not text.
+			if (element.closest("button")) continue;
+			seen.add(getComputedStyle(element).cursor);
+		}
+		return [...seen];
+	});
+
+	expect(cursors).toEqual(["text"]);
+});
+
 test("puts the old file beside the new one when that is the preference", async ({
 	page,
 }) => {

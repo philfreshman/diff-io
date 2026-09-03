@@ -37,6 +37,13 @@
 	/* The file's scrollbar is drawn over this one — see DiffScrollbar — and two
 	   of them would only compete for the same edge. */
 	scrollbar-width: none;
+	/* Stated rather than left to `auto`, and inherited by every row. Only the
+	   rows near the viewport exist, so under a still pointer the element being
+	   hit changes on every scroll step — between a row and the stretched table
+	   behind it, between a line's text and a fold's padding — and `auto` reads
+	   each of those differently. The file is text wherever the pointer is over
+	   it, so the cursor says so and stops flickering. */
+	cursor: text;
 }
 
 .scroller::-webkit-scrollbar {
