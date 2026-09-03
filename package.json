@@ -19,6 +19,8 @@
 		"format": "biome format .",
 		"typecheck": "tsc --noEmit",
 		"check:wasm-types": "bun scripts/check-wasm-types.mjs",
+		"badge": "fallow health --format badge > .github/badges/fallow-health.svg",
+		"check:badge": "fallow health --format badge | diff -u .github/badges/fallow-health.svg -",
 		"fallow": "fallow",
 		"fallow:audit": "fallow audit"
 	},

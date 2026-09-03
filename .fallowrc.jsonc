@@ -107,6 +107,12 @@
 		"css-dead-surface": "error",
 		"css-broken-reference": "error",
 
+		// Phase 7 on #111: the rule-pack evaluator. It defaults to `warn`, which
+		// would make `rule-packs/diffpack-policy.jsonc` a report rather than a
+		// policy; both of its rules are at zero today, so promoting costs
+		// nothing and is the same argument as Decision 3 above.
+		"policy-violation": "error",
+
 		// Decision 4 on #111: `private-type-leaks` stays off (its default, stated
 		// here so the choice is visible). It protects package consumers from
 		// exported signatures that reference unexported types. diffpack is an
@@ -117,5 +123,93 @@
 		// is NOT part of the Decision 3 promotion: it was the one warn-tier rule
 		// with a finding (`nitro`), now resolved by moving nitro to
 		// devDependencies. Promote it once it has been zero for a while.
+	},
+
+	// Phase 7 on #111. The repo already had this shape — routes render
+	// components, components call into lib, lib knows about neither — and
+	// `bunx fallow` reported zero violations the moment the zones below were
+	// declared. That is the argument for writing it down now rather than later:
+	// nothing had to be refactored to make it true, and from here it cannot
+	// quietly stop being true. `boundary-violation` is `error` by default, so
+	// this gates the pre-commit hook and both CI fallow jobs.
+	//
+	// NOT `{ "preset": "layered" }`, which the plan on #111 proposed. That
+	// preset's zones are `src/presentation`, `src/application`, `src/domain`
+	// and `src/infrastructure`; all four match zero files here, so adopting it
+	// would have enforced nothing while looking like it enforced a layering.
+	// Verify with `bunx fallow list --boundaries`, which prints the per-zone
+	// file counts.
+	"boundaries": {
+		"zones": [
+			{ "name": "routes", "patterns": ["src/routes/**"] },
+			{ "name": "components", "patterns": ["src/components/**"] },
+			{ "name": "lib", "patterns": ["src/lib/**"] }
+		],
+		"rules": [
+			// A route is the composition root: it parses its segments and hands
+			// them to a component, so it may reach either way down.
+			{ "from": "routes", "allow": ["components", "lib"] },
+			{ "from": "components", "allow": ["lib"] },
+			// The rule #111 actually names. `src/lib/**` is the part of this
+			// codebase that is pure, unit-tested and renders nothing — URL
+			// parsing, the registry adapters, the diff parser, the worker
+			// client, the storage prefs. One import of a component from here
+			// and every one of those tests needs a DOM.
+			{ "from": "lib", "allow": [] }
+		],
+		// Without this a new top-level directory under `src/` belongs to no
+		// zone, and unzoned files are unrestricted: the layering would go on
+		// passing while the new code sat outside it. What the exemptions say is
+		// "every file under `src/` is one of the three layers, and everything
+		// listed here is not application source at all".
+		"coverage": {
+			"requireAllFiles": true,
+			"allowUnmatched": [
+				// Build and test tooling, and the hand-written declaration that
+				// stands in for the generated wasm bindings (see
+				// `ignoreUnresolvedImports` above).
+				"*.config.ts",
+				"scripts/**",
+				"tests/**",
+				"wasm/**",
+
+				// In `src/`, but none of the three layers: the router instance
+				// the entry point constructs, the file `tsr generate` writes,
+				// and the global stylesheet holding the design tokens.
+				"src/router.tsx",
+				"src/routeTree.gen.ts",
+				"src/styles/**"
+			]
+		}
+	},
+
+	// Phase 7 on #111: policy-as-code for two invariants that are already true
+	// and that nothing else in the toolchain can hold. See the comments in the
+	// pack itself; `bunx fallow rule-pack test` evaluates it on its own.
+	//
+	// The pack file landed in #141, ahead of this entry, and had to: `fallow
+	// audit --gate new-only` analyses a worktree of the base ref using the head
+	// config, so a `rulePacks` path the base ref does not have is a config-load
+	// error (exit 2) rather than a finding — the pre-commit hook and the PR
+	// gate both go red on the change that introduces the pack. Anything added
+	// here that names a file has the same ordering constraint.
+	"rulePacks": ["rule-packs/diffpack-policy.jsonc"],
+
+	// Phase 7 on #111. Deliberately no `"enabled": true`: the semantic pass is
+	// opted into per run with `--type-aware`, which is CI only (see
+	// `.github/workflows/ci.yml`) and never the pre-commit hook. What is set
+	// here is how it behaves once something does opt in.
+	//
+	// `best-effort`, not `complete`: an incomplete semantic answer stays
+	// advisory instead of failing the job. `complete` would make CI red for a
+	// partial result rather than for a finding, and it would make the fallow
+	// jobs depend on the optional type-aware companion binary resolving on the
+	// runner. What the pass is for here is dead-code adjudication — proving a
+	// candidate export really has no consumers — which only has work to do when
+	// a change introduces a candidate. On a clean tree it reports
+	// `executed: false`.
+	"typeAware": {
+		"projects": ["tsconfig.json"],
+		"require": "best-effort"
 	},
 }

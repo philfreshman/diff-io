@@ -4,6 +4,8 @@ Compare package versions across ecosystems. Clean. Fast. Source-aware.
 
 [diffpack.io](https://diffpack.io)
 
+[![Codebase health](.github/badges/fallow-health.svg)](CONTRIBUTING.md#what-fallow-enforces-here)
+
 Paste two versions of a package and read what actually changed between them — the files, the
 lines, the renames — without cloning anything or trusting a changelog.
 
