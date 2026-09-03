@@ -6,6 +6,11 @@
  * `__root.tsx`, so the tokens are redefined per theme rather than duplicated at
  * every use site. A component reads `var(--color-foreground)`; it never branches
  * on the theme itself.
+ *
+ * The diff viewer switches on a second attribute, `data-syntax`, for the
+ * surfaces it paints: the highlight.js theme it shows brings its own ground
+ * and its own token colours, and inside the viewer those win over the page's.
+ * See "The diff itself", after the dark theme.
  */
 
 @font-face {
@@ -72,21 +77,8 @@
 	/* The row the URL names, in the tree. */
 	--color-selected-surface: #eff6ff;
 
-	/* --- The diff itself -------------------------------------------------
-	   GitHub's diff palette, carried over unchanged: a wash across the row and
-	   a stronger one in its gutter, so a line reads as added or removed at a
-	   glance and its number does too. `--color-added` above is a foreground;
-	   these are surfaces, and the two are not interchangeable. */
-	--color-added-surface: #e6ffec;
-	--color-added-gutter: #cdffd8;
-	--color-added-gutter-border: #bef5cb;
-	--color-removed-surface: #ffeef0;
-	--color-removed-gutter: #ffdce0;
-	--color-removed-gutter-border: #fdaeb7;
-	/* A fold: the lines nothing happened to, stood down out of the way. */
-	--color-fold-surface: #f1f8ff;
-	--color-fold-gutter: #dbedff;
-	--color-fold-gutter-border: #c8e1ff;
+	/* The diff's own surfaces are further down, with the second half of their
+	   set: they follow the syntax theme rather than this one. */
 
 	/* The night sky behind the landing page. Light theme has none — a component
 	   reads this token rather than branching on the theme itself. */
@@ -181,15 +173,6 @@
 	--color-renamed: #fbbf24;
 	--color-renamed-surface: rgb(120 53 15 / 0.3);
 	--color-selected-surface: rgb(30 58 138 / 0.2);
-	--color-added-surface: #233329;
-	--color-added-gutter: #1a3a2a;
-	--color-added-gutter-border: #2b4b3b;
-	--color-removed-surface: #442d30;
-	--color-removed-gutter: #61222a;
-	--color-removed-gutter-border: #6e363b;
-	--color-fold-surface: #1e2836;
-	--color-fold-gutter: #263449;
-	--color-fold-gutter-border: #38444d;
 
 	--cosmic-backdrop:
 		radial-gradient(
@@ -203,6 +186,82 @@
 			transparent 50%
 		),
 		radial-gradient(ellipse at 50% 50%, rgb(5 5 5) 0%, rgb(0 0 0) 100%);
+}
+
+/*
+ * --- The diff itself ---------------------------------------------------
+ *
+ * GitHub's diff palette, carried over unchanged: a wash across the row and a
+ * stronger one in its gutter, so a line reads as added or removed at a glance
+ * and its number does too. `--color-added` is a foreground; these are
+ * surfaces, and the two are not interchangeable.
+ *
+ * Which set a viewer uses is the *syntax* theme's decision, not the page
+ * theme's. A highlight.js stylesheet is a whole palette: it paints `.hljs` —
+ * the scroller — and picks token colours to be read on that ground. Keying
+ * these to `data-theme` meant a light theme under a dark page gave a file of
+ * alternating light and dark lines, with the syntax colours legible on only
+ * half of them (#139).
+ *
+ * `data-syntax` is written on the viewer itself, so it wins over anything
+ * <html> set however specific that was. The `:root` halves are what stands
+ * before the stored choice has been read, and for everything outside a viewer.
+ */
+:root,
+[data-syntax="light"] {
+	--color-added-surface: #e6ffec;
+	--color-added-gutter: #cdffd8;
+	--color-added-gutter-border: #bef5cb;
+	--color-removed-surface: #ffeef0;
+	--color-removed-gutter: #ffdce0;
+	--color-removed-gutter-border: #fdaeb7;
+	/* A fold: the lines nothing happened to, stood down out of the way. */
+	--color-fold-surface: #f1f8ff;
+	--color-fold-gutter: #dbedff;
+	--color-fold-gutter-border: #c8e1ff;
+}
+
+:root[data-theme="dark"],
+[data-syntax="dark"] {
+	--color-added-surface: #233329;
+	--color-added-gutter: #1a3a2a;
+	--color-added-gutter-border: #2b4b3b;
+	--color-removed-surface: #442d30;
+	--color-removed-gutter: #61222a;
+	--color-removed-gutter-border: #6e363b;
+	--color-fold-surface: #1e2836;
+	--color-fold-gutter: #263449;
+	--color-fold-gutter-border: #38444d;
+}
+
+/*
+ * And the frame around the code comes with it: the gutters and their rules,
+ * the empty half of a split row, the viewer's border, and the minimap down its
+ * edge. Gutter numbers in the page theme's grey over a syntax theme of the
+ * other ground are the same mismatch one step in from the lines.
+ *
+ * The three status foregrounds are here because the minimap's markers are
+ * drawn in them. Outside a viewer — in the tree — they keep following the page
+ * theme, which is the only theme there is out there.
+ */
+[data-syntax="light"] {
+	--color-background: #ffffff;
+	--color-muted: var(--neutral-500);
+	--color-border: var(--neutral-200);
+	--color-surface: var(--neutral-50);
+	--color-added: #16a34a;
+	--color-removed: #dc2626;
+	--color-renamed: #d97706;
+}
+
+[data-syntax="dark"] {
+	--color-background: var(--neutral-950);
+	--color-muted: var(--neutral-400);
+	--color-border: var(--neutral-800);
+	--color-surface: var(--neutral-900);
+	--color-added: #4ade80;
+	--color-removed: #f87171;
+	--color-renamed: #fbbf24;
 }
 
 /* Minimal reset — there is no Tailwind preflight to inherit from. */

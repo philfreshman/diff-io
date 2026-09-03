@@ -1,7 +1,9 @@
 import { useEffect, useState } from "react";
 import { useResolvedTheme } from "#/components/theme/useResolvedTheme.ts";
 import { themeStylesheet } from "#/lib/diff/highlightStylesheet.ts";
+import type { HighlightAppearance } from "#/lib/diff/highlightThemes.ts";
 import {
+	highlightAppearance,
 	readHighlightTheme,
 	writeHighlightTheme,
 } from "#/lib/diff/highlightThemes.ts";
@@ -12,6 +14,11 @@ const LINK_ID = "highlight-theme";
 export interface HighlightThemeControls {
 	/** The theme in force, or `null` before the stored choice has been read. */
 	theme: string | null;
+	/**
+	 * The ground that theme paints on. The viewer wears it as `data-syntax` and
+	 * takes its own surfaces from it — see `highlightAppearance`.
+	 */
+	appearance: HighlightAppearance | null;
 	choose(theme: string): void;
 }
 
@@ -45,6 +52,7 @@ export function useHighlightTheme(): HighlightThemeControls {
 
 	return {
 		theme,
+		appearance: highlightAppearance(theme),
 		choose(next: string) {
 			setTheme(next);
 			writeHighlightTheme(next);

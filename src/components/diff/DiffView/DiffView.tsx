@@ -1,6 +1,6 @@
 import { useVirtualizer } from "@tanstack/react-virtual";
 import type { CSSProperties, Ref } from "react";
-import { useImperativeHandle, useMemo, useRef } from "react";
+import { useImperativeHandle, useRef } from "react";
 import { CollapsedRow } from "#/components/diff/CollapsedRow/CollapsedRow.tsx";
 import { DiffRow } from "#/components/diff/DiffRow/DiffRow.tsx";
 import { DiffScrollbar } from "#/components/diff/DiffScrollbar/DiffScrollbar.tsx";
@@ -8,7 +8,7 @@ import { SplitDiffRow } from "#/components/diff/SplitDiffRow/SplitDiffRow.tsx";
 import { stepDifference as nextDifference } from "#/lib/diff/changes.ts";
 import type { Expander } from "#/lib/diff/computeVisibility.ts";
 import { gutterChars } from "#/lib/diff/gutter.ts";
-import { changeMarkers } from "#/lib/diff/scrollbar.ts";
+import type { HighlightAppearance } from "#/lib/diff/highlightThemes.ts";
 import type { FileView } from "#/lib/diff/viewMemory.ts";
 import type { FileDiff } from "#/lib/worker/protocol.ts";
 import styles from "./DiffView.module.css";
@@ -41,6 +41,12 @@ export interface DiffViewProps {
 	pending?: boolean;
 	/** How the toolbar's difference arrows reach the scroller. */
 	ref?: Ref<DiffViewHandle>;
+	/**
+	 * The ground the syntax theme paints on, or `null` before it has been read.
+	 * Everything the viewer colours itself follows this rather than the page
+	 * theme — see `data-syntax` below.
+	 */
+	syntax: HighlightAppearance | null;
 }
 
 /**
@@ -67,6 +73,7 @@ export function DiffView({
 	onClose,
 	pending,
 	ref,
+	syntax,
 }: DiffViewProps) {
 	const { lines, language, rows, stops } = useDiffModel(
 		path,
@@ -90,19 +97,11 @@ export function DiffView({
 		initialOffset: view.scrollTop,
 	});
 
-	// How tall the file is, and — as a side effect of asking — the virtualiser's
-	// measurements brought up to date. The minimap is drawn from those rather
-	// than from the row count: rows wrap, so in a minified file three rows are
-	// a whole screen of scrolling and thirds of the track would be nowhere near
-	// where the thumb takes the reader.
+	// How tall the file is — and, as a side effect of asking, the virtualiser's
+	// measurements brought up to date. The scrollbar draws its minimap from
+	// those, so they are handed to it rather than to the row model, which is
+	// derived before a virtualiser exists.
 	const height = virtualizer.getTotalSize();
-	// `measurementsCache` rather than the rendered items, which are only the
-	// rows on screen — the part of the file that needs no minimap. Every index
-	// has a span in it, an estimate until the row has been drawn once.
-	const markers = useMemo(
-		() => changeMarkers(rows, virtualizer.measurementsCache),
-		[rows, virtualizer.measurementsCache],
-	);
 
 	// Stepping through the differences is the toolbar's button and the viewer's
 	// scroller at once, so it is exposed rather than lifted: the offsets it
@@ -146,6 +145,14 @@ export function DiffView({
 			// What the file was taken to be written in — the one decision the
 			// colouring of every row follows from.
 			data-language={language ?? ""}
+			// Whether the syntax theme paints on a light ground or a dark one.
+			// The added and removed washes, the gutters and the frame are keyed
+			// off this rather than off the page theme: a light theme colours its
+			// tokens for a white page, and reading them over the page's dark
+			// surfaces gave a file of alternately light and dark lines (#139).
+			// Absent until the stored choice has been read, which leaves the
+			// page theme's own surfaces standing — what they were before.
+			data-syntax={syntax ?? undefined}
 			style={
 				{
 					"--gutter-width": `calc(${gutterChars(lines)}ch + var(--space-4))`,
@@ -205,7 +212,11 @@ export function DiffView({
 					</tbody>
 				</table>
 			</div>
-			<DiffScrollbar markers={markers} scroller={scroller} />
+			<DiffScrollbar
+				rows={rows}
+				scroller={scroller}
+				spans={virtualizer.measurementsCache}
+			/>
 		</div>
 	);
 }
