@@ -1,6 +1,6 @@
 import { useVirtualizer } from "@tanstack/react-virtual";
 import type { CSSProperties, Ref } from "react";
-import { useImperativeHandle, useRef } from "react";
+import { useImperativeHandle, useMemo, useRef } from "react";
 import { CollapsedRow } from "#/components/diff/CollapsedRow/CollapsedRow.tsx";
 import { DiffRow } from "#/components/diff/DiffRow/DiffRow.tsx";
 import { DiffScrollbar } from "#/components/diff/DiffScrollbar/DiffScrollbar.tsx";
@@ -8,6 +8,7 @@ import { SplitDiffRow } from "#/components/diff/SplitDiffRow/SplitDiffRow.tsx";
 import { stepDifference as nextDifference } from "#/lib/diff/changes.ts";
 import type { Expander } from "#/lib/diff/computeVisibility.ts";
 import { gutterChars } from "#/lib/diff/gutter.ts";
+import { changeMarkers } from "#/lib/diff/scrollbar.ts";
 import type { FileView } from "#/lib/diff/viewMemory.ts";
 import type { FileDiff } from "#/lib/worker/protocol.ts";
 import styles from "./DiffView.module.css";
@@ -67,7 +68,7 @@ export function DiffView({
 	pending,
 	ref,
 }: DiffViewProps) {
-	const { lines, language, rows, markers, stops } = useDiffModel(
+	const { lines, language, rows, stops } = useDiffModel(
 		path,
 		file,
 		view,
@@ -88,6 +89,20 @@ export function DiffView({
 		// jump.
 		initialOffset: view.scrollTop,
 	});
+
+	// How tall the file is, and — as a side effect of asking — the virtualiser's
+	// measurements brought up to date. The minimap is drawn from those rather
+	// than from the row count: rows wrap, so in a minified file three rows are
+	// a whole screen of scrolling and thirds of the track would be nowhere near
+	// where the thumb takes the reader.
+	const height = virtualizer.getTotalSize();
+	// `measurementsCache` rather than the rendered items, which are only the
+	// rows on screen — the part of the file that needs no minimap. Every index
+	// has a span in it, an estimate until the row has been drawn once.
+	const markers = useMemo(
+		() => changeMarkers(rows, virtualizer.measurementsCache),
+		[rows, virtualizer.measurementsCache],
+	);
 
 	// Stepping through the differences is the toolbar's button and the viewer's
 	// scroller at once, so it is exposed rather than lifted: the offsets it
@@ -148,11 +163,7 @@ export function DiffView({
 					at.current = event.currentTarget.scrollTop;
 				}}
 			>
-				<table
-					className={styles.sizer}
-					aria-label={path}
-					style={{ height: virtualizer.getTotalSize() }}
-				>
+				<table className={styles.sizer} aria-label={path} style={{ height }}>
 					<tbody>
 						{virtualizer.getVirtualItems().map((item) => {
 							const row = rows[item.index];

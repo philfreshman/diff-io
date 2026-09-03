@@ -10,7 +10,6 @@ import {
 	type DiffLine,
 	parseUnifiedDiff,
 } from "#/lib/diff/parseUnifiedDiff.ts";
-import { changeMarkers, type Marker } from "#/lib/diff/scrollbar.ts";
 import type { FileView } from "#/lib/diff/viewMemory.ts";
 import type { FileDiff } from "#/lib/worker/protocol.ts";
 
@@ -22,8 +21,6 @@ export interface DiffModel {
 	language: string | null;
 	/** The rows on screen: folded, and paired into two columns when split. */
 	rows: DiffRow[] | SplitRow[];
-	/** Where along the file the scrollbar paints a change. */
-	markers: Marker[];
 	/** The rows the toolbar's difference arrows stop at. */
 	stops: number[];
 }
@@ -54,15 +51,10 @@ export function useDiffModel(
 		[split, unified],
 	);
 
-	// From the rows rather than from the DOM: the list is virtualised, so
-	// markers measured off rendered rows would only ever cover the part of the
-	// file already on screen.
-	const markers = useMemo(() => changeMarkers(rows), [rows]);
-
 	// The same rows again, as the places the toolbar's arrows stop: folding and
 	// split pairing both move a change to a different row, so where a
 	// difference *is* has to be recomputed alongside them.
 	const stops = useMemo(() => differenceRows(rows), [rows]);
 
-	return { lines, language, rows, markers, stops };
+	return { lines, language, rows, stops };
 }
