@@ -1,4 +1,5 @@
 import { SettingsMenu } from "#/components/diff/SettingsMenu/SettingsMenu.tsx";
+import type { HighlightThemeControls } from "#/components/diff/useHighlightTheme.ts";
 import { IconButton } from "#/components/ui/IconButton/IconButton.tsx";
 import {
 	ArrowDownIcon,
@@ -35,6 +36,8 @@ export interface DiffToolbarProps {
 	/** Whether a line that differs only in whitespace counts as a change. */
 	ignoreWhitespace: boolean;
 	onIgnoreWhitespaceChange(ignore: boolean): void;
+	/** Which theme the code is coloured with — the gear's longest setting. */
+	highlight: HighlightThemeControls;
 }
 
 /**
@@ -65,6 +68,7 @@ export function DiffToolbar({
 	onSplitChange,
 	ignoreWhitespace,
 	onIgnoreWhitespaceChange,
+	highlight,
 }: DiffToolbarProps) {
 	const open = path !== "";
 
@@ -138,6 +142,7 @@ export function DiffToolbar({
 			/>
 
 			<SettingsMenu
+				highlight={highlight}
 				ignoreWhitespace={ignoreWhitespace}
 				onIgnoreWhitespaceChange={onIgnoreWhitespaceChange}
 			/>

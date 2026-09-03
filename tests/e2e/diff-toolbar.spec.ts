@@ -372,6 +372,73 @@ test("every theme it offers is one it can serve", async ({ page }) => {
 	}
 });
 
+/**
+ * How light every surface the viewer paints is, as luma in 0–1: the scroller,
+ * which the syntax theme's stylesheet paints, and the washes on the changed
+ * and folded rows, which the viewer paints itself. A theme is only coherent if
+ * these all sit on one side of the middle.
+ */
+async function surfaceLumas(page: Page) {
+	return page.evaluate(() => {
+		const luma = (color: string) => {
+			const [r = 0, g = 0, b = 0] = (color.match(/\d+(\.\d+)?/g) ?? []).map(
+				Number,
+			);
+			return (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255;
+		};
+		const opaque = (node: Element) => {
+			const background = getComputedStyle(node).backgroundColor;
+			// A row with no wash of its own shows the scroller's ground, and says
+			// nothing about whether the two agree.
+			return background.startsWith("rgba(0, 0, 0, 0") ? null : background;
+		};
+
+		const scroller = document.querySelector('[data-testid="diff-scroller"]');
+		if (!scroller) throw new Error("no scroller");
+
+		const rows = [...scroller.querySelectorAll("tr")]
+			.map(opaque)
+			.filter((background) => background !== null);
+
+		return [getComputedStyle(scroller).backgroundColor, ...rows].map(luma);
+	});
+}
+
+test("a light syntax theme brings the whole viewer with it, dark page or not", async ({
+	page,
+}) => {
+	await open(page, MANIFEST);
+	// The page is dark — the default — and the theme about to be chosen is
+	// light. That pairing used to give a file of alternating light and dark
+	// lines, with the syntax colours legible on only half of them (#139).
+	await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
+
+	await openThemes(page);
+	await page
+		.getByRole("button", { name: "Atom One Light", exact: true })
+		.click();
+
+	await expect(page.getByTestId("diff-view")).toHaveAttribute(
+		"data-syntax",
+		"light",
+	);
+	// Every wash in the viewer, not only the code's ground: the added and
+	// removed rows and the folds are what disagreed with it.
+	for (const luma of await surfaceLumas(page))
+		expect(luma).toBeGreaterThan(0.5);
+
+	// And back the other way, so this is the syntax theme deciding rather than
+	// the viewer having simply been made light.
+	await openThemes(page);
+	await page.getByRole("button", { name: "Monokai", exact: true }).click();
+
+	await expect(page.getByTestId("diff-view")).toHaveAttribute(
+		"data-syntax",
+		"dark",
+	);
+	for (const luma of await surfaceLumas(page)) expect(luma).toBeLessThan(0.5);
+});
+
 test("colours the code by what the tokens are", async ({ page }) => {
 	await open(page, MANIFEST);
 
