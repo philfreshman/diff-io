@@ -31,7 +31,7 @@ pub async fn fetch_and_extract_package(
 ) -> Result<HashMap<String, FileMapEntry>, JsValue> {
     if registry == "go" {
         let bytes = fetch_bytes(&build_go_zip_url(pkg, version)).await?;
-        let files = extract_archive_bytes_with(&bytes, false)?;
+        let files = extract_archive_bytes_with(&bytes, false).map_err(|err| JsValue::from_str(&err))?;
         return Ok(strip_go_module_root(files, pkg, version));
     }
 
@@ -42,7 +42,7 @@ pub async fn fetch_and_extract_package(
             fetch_bytes(&url).await?
         }
     };
-    extract_archive_bytes(&bytes)
+    extract_archive_bytes(&bytes).map_err(|err| JsValue::from_str(&err))
 }
 
 /// The module proxy serves lower-cased paths, escaping each uppercase letter as
@@ -195,20 +195,24 @@ fn is_supported_archive_url(url: &str) -> bool {
         || lower.ends_with(".whl")
 }
 
-fn extract_archive_bytes(bytes: &[u8]) -> Result<HashMap<String, FileMapEntry>, JsValue> {
+/// Every archive shape a registry serves — `.tgz`/`.crate` (gzip'd tar),
+/// `.zip`/`.whl`, or a bare tar — to the path → entry map the diff runs on,
+/// with a single top-level directory stripped. Pure Rust, so it is also what
+/// `examples/bench.rs` times natively.
+pub fn extract_archive_bytes(bytes: &[u8]) -> Result<HashMap<String, FileMapEntry>, String> {
     extract_archive_bytes_with(bytes, true)
 }
 
 fn extract_archive_bytes_with(
     bytes: &[u8],
     strip_root: bool,
-) -> Result<HashMap<String, FileMapEntry>, JsValue> {
+) -> Result<HashMap<String, FileMapEntry>, String> {
     if is_gzip(bytes) {
         let mut decoder = GzDecoder::new(bytes);
         let mut decompressed = Vec::new();
         decoder
             .read_to_end(&mut decompressed)
-            .map_err(|err| JsValue::from_str(&format!("Gzip decompression failed: {err}")))?;
+            .map_err(|err| format!("Gzip decompression failed: {err}"))?;
         return extract_archive_bytes_with(&decompressed, strip_root);
     }
 
@@ -222,19 +226,19 @@ fn extract_archive_bytes_with(
 fn parse_tar_bytes(
     bytes: &[u8],
     strip_root: bool,
-) -> Result<HashMap<String, FileMapEntry>, JsValue> {
+) -> Result<HashMap<String, FileMapEntry>, String> {
     let mut archive = Archive::new(Cursor::new(bytes));
     let mut files = HashMap::new();
     let entries = archive
         .entries()
-        .map_err(|err| JsValue::from_str(&format!("Tar parsing failed: {err}")))?;
+        .map_err(|err| format!("Tar parsing failed: {err}"))?;
 
     for entry in entries {
-        let mut entry = entry.map_err(|err| JsValue::from_str(&format!("Tar entry error: {err}")))?;
+        let mut entry = entry.map_err(|err| format!("Tar entry error: {err}"))?;
         let entry_type = entry.header().entry_type();
         let path = entry
             .path()
-            .map_err(|err| JsValue::from_str(&format!("Tar path error: {err}")))?;
+            .map_err(|err| format!("Tar path error: {err}"))?;
         let normalized = normalize_path(&path.to_string_lossy(), entry_type.is_dir());
         if normalized.is_empty() {
             continue;
@@ -252,7 +256,7 @@ fn parse_tar_bytes(
             let mut contents = Vec::new();
             entry
                 .read_to_end(&mut contents)
-                .map_err(|err| JsValue::from_str(&format!("Tar read failed: {err}")))?;
+                .map_err(|err| format!("Tar read failed: {err}"))?;
             files.insert(
                 normalized,
                 FileMapEntry {
@@ -274,15 +278,15 @@ fn parse_tar_bytes(
 fn parse_zip_bytes(
     bytes: &[u8],
     strip_root: bool,
-) -> Result<HashMap<String, FileMapEntry>, JsValue> {
+) -> Result<HashMap<String, FileMapEntry>, String> {
     let reader = Cursor::new(bytes);
     let mut archive =
-        ZipArchive::new(reader).map_err(|err| JsValue::from_str(&format!("Zip parsing failed: {err}")))?;
+        ZipArchive::new(reader).map_err(|err| format!("Zip parsing failed: {err}"))?;
     let mut files = HashMap::new();
 
     for i in 0..archive.len() {
         let mut entry =
-            archive.by_index(i).map_err(|err| JsValue::from_str(&format!("Zip entry error: {err}")))?;
+            archive.by_index(i).map_err(|err| format!("Zip entry error: {err}"))?;
         let normalized = normalize_path(entry.name(), entry.is_dir());
         if normalized.is_empty() {
             continue;
@@ -300,7 +304,7 @@ fn parse_zip_bytes(
             let mut contents = Vec::new();
             entry
                 .read_to_end(&mut contents)
-                .map_err(|err| JsValue::from_str(&format!("Zip read failed: {err}")))?;
+                .map_err(|err| format!("Zip read failed: {err}"))?;
             files.insert(
                 normalized,
                 FileMapEntry {
