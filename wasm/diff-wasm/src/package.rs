@@ -1,5 +1,5 @@
 use std::collections::{HashMap, HashSet};
-use std::io::{Cursor, Read};
+use std::io::{BufRead, BufReader, Cursor, Read};
 
 use flate2::read::GzDecoder;
 use js_sys::Uint8Array;
@@ -31,7 +31,7 @@ pub async fn fetch_and_extract_package(
 ) -> Result<HashMap<String, FileMapEntry>, JsValue> {
     if registry == "go" {
         let bytes = fetch_bytes(&build_go_zip_url(pkg, version)).await?;
-        let files = extract_archive_bytes_with(&bytes, false)?;
+        let files = extract_archive_bytes_with(&bytes, false).map_err(|err| JsValue::from_str(&err))?;
         return Ok(strip_go_module_root(files, pkg, version));
     }
 
@@ -42,7 +42,7 @@ pub async fn fetch_and_extract_package(
             fetch_bytes(&url).await?
         }
     };
-    extract_archive_bytes(&bytes)
+    extract_archive_bytes(&bytes).map_err(|err| JsValue::from_str(&err))
 }
 
 /// The module proxy serves lower-cased paths, escaping each uppercase letter as
@@ -195,71 +195,135 @@ fn is_supported_archive_url(url: &str) -> bool {
         || lower.ends_with(".whl")
 }
 
-fn extract_archive_bytes(bytes: &[u8]) -> Result<HashMap<String, FileMapEntry>, JsValue> {
+/// Every archive shape a registry serves — `.tgz`/`.crate` (gzip'd tar),
+/// `.zip`/`.whl`, or a bare tar — to the path → entry map the diff runs on,
+/// with a single top-level directory stripped. Pure Rust, so it is also what
+/// `examples/bench.rs` times natively.
+pub fn extract_archive_bytes(bytes: &[u8]) -> Result<HashMap<String, FileMapEntry>, String> {
     extract_archive_bytes_with(bytes, true)
 }
 
+/// How far ahead of the tar parser the gunzip runs. Tar reads its 512-byte
+/// headers one at a time; without this each of them would be its own trip
+/// into the inflater.
+const GUNZIP_READAHEAD: usize = 64 * 1024;
+
+/// The most a byte of deflate can expand to, per the format. Bounds every
+/// size an archive *claims* — a gzip trailer, a tar header, a zip directory —
+/// so a corrupt or hostile one cannot ask for a buffer the input could never
+/// fill. wasm memory never shrinks, so a wild pre-allocation would stay with
+/// the page for the rest of the session.
+const MAX_DEFLATE_RATIO: usize = 1032;
+
+/// The uncompressed content is copied as few times as the formats allow:
+///
+/// - a gzip'd tar is streamed straight from the inflater into the tar
+///   parser, never materialised as a whole;
+/// - a gzip'd zip has to be materialised, because zip is read from its
+///   central directory at the end, but into a buffer sized once from the
+///   gzip trailer rather than grown from empty;
+/// - every entry lands in a buffer sized from its header and becomes a
+///   `String` without another copy when it is valid UTF-8, which nearly every
+///   file is.
+///
+/// On an 80 MB package the old path — gunzip into an unsized buffer, each
+/// entry into another, then `from_utf8_lossy(..).into_owned()` — was ~7 copies
+/// of the content; `tests::COPIES_ALLOWED` pins the budget this has to meet.
 fn extract_archive_bytes_with(
     bytes: &[u8],
     strip_root: bool,
-) -> Result<HashMap<String, FileMapEntry>, JsValue> {
+) -> Result<HashMap<String, FileMapEntry>, String> {
     if is_gzip(bytes) {
-        let mut decoder = GzDecoder::new(bytes);
-        let mut decompressed = Vec::new();
-        decoder
-            .read_to_end(&mut decompressed)
-            .map_err(|err| JsValue::from_str(&format!("Gzip decompression failed: {err}")))?;
-        return extract_archive_bytes_with(&decompressed, strip_root);
+        let size_cap = bytes.len().saturating_mul(MAX_DEFLATE_RATIO);
+        let mut decoder = BufReader::with_capacity(GUNZIP_READAHEAD, GzDecoder::new(bytes));
+        let head = decoder
+            .fill_buf()
+            .map_err(|err| format!("Gzip decompression failed: {err}"))?;
+        if is_zip(head) {
+            let mut decompressed = Vec::with_capacity(gzip_uncompressed_size(bytes).min(size_cap));
+            decoder
+                .read_to_end(&mut decompressed)
+                .map_err(|err| format!("Gzip decompression failed: {err}"))?;
+            return parse_zip_bytes(&decompressed, strip_root);
+        }
+        return parse_tar(decoder, size_cap, strip_root);
     }
 
     if is_zip(bytes) {
         return parse_zip_bytes(bytes, strip_root);
     }
 
-    parse_tar_bytes(bytes, strip_root)
+    parse_tar(bytes, bytes.len(), strip_root)
 }
 
-fn parse_tar_bytes(
-    bytes: &[u8],
+/// The ISIZE trailer: the uncompressed length modulo 2³², which for anything
+/// a registry serves is the length. Only a hint for a buffer's capacity, so a
+/// wrong one costs a reallocation, never a wrong result.
+fn gzip_uncompressed_size(bytes: &[u8]) -> usize {
+    match bytes {
+        [.., a, b, c, d] => u32::from_le_bytes([*a, *b, *c, *d]) as usize,
+        _ => 0,
+    }
+}
+
+/// A buffer for an entry that says it is `declared` bytes long. `cap` is the
+/// most the archive as a whole can hold, so a lying header gets at most that.
+fn entry_buffer(declared: u64, cap: usize) -> Vec<u8> {
+    let declared = usize::try_from(declared).unwrap_or(usize::MAX);
+    Vec::with_capacity(declared.min(cap))
+}
+
+/// Owns the bytes when they are UTF-8 — no copy — and renders them lossily
+/// only when they are not, exactly as they were always rendered.
+fn content_from_bytes(bytes: Vec<u8>) -> String {
+    String::from_utf8(bytes)
+        .unwrap_or_else(|err| String::from_utf8_lossy(err.as_bytes()).into_owned())
+}
+
+fn file_entry(content: String) -> FileMapEntry {
+    FileMapEntry {
+        file_type: FileType::File,
+        content,
+    }
+}
+
+fn directory_entry() -> FileMapEntry {
+    FileMapEntry {
+        file_type: FileType::Directory,
+        content: String::new(),
+    }
+}
+
+fn parse_tar<R: Read>(
+    reader: R,
+    size_cap: usize,
     strip_root: bool,
-) -> Result<HashMap<String, FileMapEntry>, JsValue> {
-    let mut archive = Archive::new(Cursor::new(bytes));
+) -> Result<HashMap<String, FileMapEntry>, String> {
+    let mut archive = Archive::new(reader);
     let mut files = HashMap::new();
     let entries = archive
         .entries()
-        .map_err(|err| JsValue::from_str(&format!("Tar parsing failed: {err}")))?;
+        .map_err(|err| format!("Tar parsing failed: {err}"))?;
 
     for entry in entries {
-        let mut entry = entry.map_err(|err| JsValue::from_str(&format!("Tar entry error: {err}")))?;
+        let mut entry = entry.map_err(|err| format!("Tar entry error: {err}"))?;
         let entry_type = entry.header().entry_type();
         let path = entry
             .path()
-            .map_err(|err| JsValue::from_str(&format!("Tar path error: {err}")))?;
+            .map_err(|err| format!("Tar path error: {err}"))?;
         let normalized = normalize_path(&path.to_string_lossy(), entry_type.is_dir());
         if normalized.is_empty() {
             continue;
         }
 
         if entry_type.is_dir() {
-            files.insert(
-                normalized,
-                FileMapEntry {
-                    file_type: FileType::Directory,
-                    content: String::new(),
-                },
-            );
+            files.insert(normalized, directory_entry());
         } else if entry_type.is_file() {
-            let mut contents = Vec::new();
+            let mut contents = entry_buffer(entry.size(), size_cap);
             entry
                 .read_to_end(&mut contents)
-                .map_err(|err| JsValue::from_str(&format!("Tar read failed: {err}")))?;
-            files.insert(
-                normalized,
-                FileMapEntry {
-                    file_type: FileType::File,
-                    content: String::from_utf8_lossy(&contents).into_owned(),
-                },
-            );
+                .map_err(|err| format!("Tar read failed: {err}"))?;
+            files.insert(normalized, file_entry(content_from_bytes(contents)));
         }
     }
 
@@ -274,40 +338,29 @@ fn parse_tar_bytes(
 fn parse_zip_bytes(
     bytes: &[u8],
     strip_root: bool,
-) -> Result<HashMap<String, FileMapEntry>, JsValue> {
+) -> Result<HashMap<String, FileMapEntry>, String> {
+    let size_cap = bytes.len().saturating_mul(MAX_DEFLATE_RATIO);
     let reader = Cursor::new(bytes);
     let mut archive =
-        ZipArchive::new(reader).map_err(|err| JsValue::from_str(&format!("Zip parsing failed: {err}")))?;
+        ZipArchive::new(reader).map_err(|err| format!("Zip parsing failed: {err}"))?;
     let mut files = HashMap::new();
 
     for i in 0..archive.len() {
         let mut entry =
-            archive.by_index(i).map_err(|err| JsValue::from_str(&format!("Zip entry error: {err}")))?;
+            archive.by_index(i).map_err(|err| format!("Zip entry error: {err}"))?;
         let normalized = normalize_path(entry.name(), entry.is_dir());
         if normalized.is_empty() {
             continue;
         }
 
         if entry.is_dir() {
-            files.insert(
-                normalized,
-                FileMapEntry {
-                    file_type: FileType::Directory,
-                    content: String::new(),
-                },
-            );
+            files.insert(normalized, directory_entry());
         } else {
-            let mut contents = Vec::new();
+            let mut contents = entry_buffer(entry.size(), size_cap);
             entry
                 .read_to_end(&mut contents)
-                .map_err(|err| JsValue::from_str(&format!("Zip read failed: {err}")))?;
-            files.insert(
-                normalized,
-                FileMapEntry {
-                    file_type: FileType::File,
-                    content: String::from_utf8_lossy(&contents).into_owned(),
-                },
-            );
+                .map_err(|err| format!("Zip read failed: {err}"))?;
+            files.insert(normalized, file_entry(content_from_bytes(contents)));
         }
     }
 
@@ -358,13 +411,7 @@ fn ensure_directories(files: &mut HashMap<String, FileMapEntry>) {
             }
             current.push_str(part);
             if !files.contains_key(&current) {
-                files.insert(
-                    current.clone(),
-                    FileMapEntry {
-                        file_type: FileType::Directory,
-                        content: String::new(),
-                    },
-                );
+                files.insert(current.clone(), directory_entry());
             }
         }
     }
@@ -416,5 +463,231 @@ fn strip_common_root(mut files: HashMap<String, FileMapEntry>) -> HashMap<String
         new_files
     } else {
         files
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::alloc::{GlobalAlloc, Layout, System};
+    use std::cell::Cell;
+    use std::io::Write;
+
+    use flate2::write::GzEncoder;
+    use flate2::Compression;
+
+    /// Counts every byte the current thread asks the allocator for, so a test
+    /// can pin how many times a package's content is copied on its way to the
+    /// map — a deterministic figure where a timing would flake. A realloc
+    /// counts its new size in full: a growing `Vec` that doubles its way to
+    /// `n` bytes has asked for about `2n`, which is the shape being measured.
+    struct CountingAllocator;
+
+    thread_local! {
+        static REQUESTED: Cell<usize> = const { Cell::new(0) };
+    }
+
+    fn record(bytes: usize) {
+        // A thread that is being torn down has no counter to update.
+        let _ = REQUESTED.try_with(|counter| counter.set(counter.get() + bytes));
+    }
+
+    unsafe impl GlobalAlloc for CountingAllocator {
+        unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
+            record(layout.size());
+            System.alloc(layout)
+        }
+
+        unsafe fn dealloc(&self, ptr: *mut u8, layout: Layout) {
+            System.dealloc(ptr, layout)
+        }
+
+        unsafe fn realloc(&self, ptr: *mut u8, layout: Layout, new_size: usize) -> *mut u8 {
+            record(new_size);
+            System.realloc(ptr, layout, new_size)
+        }
+    }
+
+    #[global_allocator]
+    static ALLOCATOR: CountingAllocator = CountingAllocator;
+
+    fn bytes_requested_during<T>(f: impl FnOnce() -> T) -> (T, usize) {
+        let before = REQUESTED.with(Cell::get);
+        let out = f();
+        let after = REQUESTED.with(Cell::get);
+        (out, after - before)
+    }
+
+    /// Text that deflates like source code does — repetitive, but not so
+    /// trivially that the decompressor's cost vanishes.
+    fn text(seed: usize, bytes: usize) -> Vec<u8> {
+        let mut out = Vec::with_capacity(bytes + 64);
+        let mut line = 0;
+        while out.len() < bytes {
+            let _ = writeln!(out, "let value_{line} = compute({seed}, {});", line * 7 % 13);
+            line += 1;
+        }
+        out.truncate(bytes);
+        out
+    }
+
+    /// `(path, bytes)` for a package of `count` files of `size` bytes each,
+    /// under one top-level directory the way a registry tarball is laid out.
+    fn package(count: usize, size: usize) -> Vec<(String, Vec<u8>)> {
+        (0..count)
+            .map(|i| (format!("pkg-1.0.0/src/file_{i}.rs"), text(i, size)))
+            .collect()
+    }
+
+    fn tar_bytes(entries: &[(String, Vec<u8>)]) -> Vec<u8> {
+        let mut builder = tar::Builder::new(Vec::new());
+        for (path, bytes) in entries {
+            let mut header = tar::Header::new_gnu();
+            header.set_size(bytes.len() as u64);
+            header.set_mode(0o644);
+            header.set_cksum();
+            builder
+                .append_data(&mut header, path, bytes.as_slice())
+                .unwrap();
+        }
+        builder.into_inner().unwrap()
+    }
+
+    fn gzip(bytes: &[u8]) -> Vec<u8> {
+        let mut encoder = GzEncoder::new(Vec::new(), Compression::default());
+        encoder.write_all(bytes).unwrap();
+        encoder.finish().unwrap()
+    }
+
+    fn zip_bytes(entries: &[(String, Vec<u8>)]) -> Vec<u8> {
+        let mut writer = zip::ZipWriter::new(Cursor::new(Vec::new()));
+        let options = zip::write::SimpleFileOptions::default()
+            .compression_method(zip::CompressionMethod::Deflated);
+        for (path, bytes) in entries {
+            writer.start_file(path.as_str(), options).unwrap();
+            writer.write_all(bytes).unwrap();
+        }
+        writer.finish().unwrap().into_inner()
+    }
+
+    fn content_bytes(entries: &[(String, Vec<u8>)]) -> usize {
+        entries.iter().map(|(_, bytes)| bytes.len()).sum()
+    }
+
+    /// What every extracted file must read as: the bytes themselves when they
+    /// are UTF-8, and the lossy rendering when they are not.
+    fn expected_content(bytes: &[u8]) -> String {
+        String::from_utf8_lossy(bytes).into_owned()
+    }
+
+    fn assert_extracts_exactly(archive: &[u8], entries: &[(String, Vec<u8>)]) {
+        let files = extract_archive_bytes(archive).unwrap();
+        for (path, bytes) in entries {
+            let stripped = path.strip_prefix("pkg-1.0.0/").unwrap();
+            let entry = files
+                .get(stripped)
+                .unwrap_or_else(|| panic!("{stripped} missing from {:?}", files.keys()));
+            assert!(matches!(entry.file_type, FileType::File));
+            assert_eq!(entry.content, expected_content(bytes), "{stripped}");
+        }
+        let file_count = files
+            .values()
+            .filter(|entry| matches!(entry.file_type, FileType::File))
+            .count();
+        assert_eq!(file_count, entries.len());
+    }
+
+    /// Valid UTF-8, invalid UTF-8, and an empty file, in every archive shape a
+    /// registry serves plus the bare tar and gzipped zip the extractor also
+    /// accepts. Invalid bytes must come out as the lossy rendering they always
+    /// have — the fast path must not change what a reader sees.
+    fn mixed_entries() -> Vec<(String, Vec<u8>)> {
+        vec![
+            ("pkg-1.0.0/src/lib.rs".to_string(), text(1, 3000)),
+            ("pkg-1.0.0/README.md".to_string(), "# héllo wörld ✓\n".as_bytes().to_vec()),
+            ("pkg-1.0.0/data.bin".to_string(), vec![0x66, 0x6f, 0xff, 0xfe, 0x6f, 0x80, 0x0a]),
+            ("pkg-1.0.0/empty".to_string(), Vec::new()),
+            ("pkg-1.0.0/src/exact_block.rs".to_string(), text(2, 512)),
+            ("pkg-1.0.0/src/truncated_utf8.rs".to_string(), "abc€".as_bytes()[..5].to_vec()),
+        ]
+    }
+
+    #[test]
+    fn a_gzipped_tar_extracts_every_file_byte_for_byte() {
+        let entries = mixed_entries();
+        assert_extracts_exactly(&gzip(&tar_bytes(&entries)), &entries);
+    }
+
+    #[test]
+    fn a_bare_tar_extracts_every_file_byte_for_byte() {
+        let entries = mixed_entries();
+        assert_extracts_exactly(&tar_bytes(&entries), &entries);
+    }
+
+    #[test]
+    fn a_zip_extracts_every_file_byte_for_byte() {
+        let entries = mixed_entries();
+        assert_extracts_exactly(&zip_bytes(&entries), &entries);
+    }
+
+    #[test]
+    fn a_gzipped_zip_extracts_every_file_byte_for_byte() {
+        let entries = mixed_entries();
+        assert_extracts_exactly(&gzip(&zip_bytes(&entries)), &entries);
+    }
+
+    #[test]
+    fn invalid_utf8_is_rendered_lossily_not_dropped() {
+        let entries = mixed_entries();
+        let files = extract_archive_bytes(&gzip(&tar_bytes(&entries))).unwrap();
+        assert_eq!(files["data.bin"].content, "fo\u{FFFD}\u{FFFD}o\u{FFFD}\n");
+        assert_eq!(files["src/truncated_utf8.rs"].content, "abc\u{FFFD}");
+    }
+
+    #[test]
+    fn a_corrupt_gzip_stream_is_an_error_not_a_partial_package() {
+        let mut archive = gzip(&tar_bytes(&mixed_entries()));
+        let cut = archive.len() / 2;
+        archive.truncate(cut);
+        assert!(extract_archive_bytes(&archive).is_err());
+    }
+
+    /// The budget every archive shape has to meet: each byte of file content
+    /// is copied into its `String` about once. Before this was pinned, a
+    /// gzipped tar cost ~5× — the gunzip buffer doubling its way up, each
+    /// entry's buffer doubling its way up again, and a third copy for
+    /// `from_utf8_lossy(..).into_owned()` on bytes that were valid all along —
+    /// and on an 80 MB package that is the difference between a 100 MB and a
+    /// 400 MB high-water mark in a wasm heap that never shrinks.
+    const COPIES_ALLOWED: usize = 2;
+
+    fn assert_within_copy_budget(archive: &[u8], entries: &[(String, Vec<u8>)], shape: &str) {
+        let (files, requested) = bytes_requested_during(|| extract_archive_bytes(archive).unwrap());
+        let content = content_bytes(entries);
+        assert!(files.len() > entries.len(), "directories are in the map too");
+        assert!(
+            requested < COPIES_ALLOWED * content,
+            "{shape}: extracting {content} bytes of content requested {requested} bytes \
+             from the allocator ({:.2} copies); the budget is {COPIES_ALLOWED}",
+            requested as f64 / content as f64
+        );
+    }
+
+    #[test]
+    fn extracting_a_gzipped_tar_copies_each_byte_of_content_about_once() {
+        let entries = package(48, 96 * 1024);
+        assert_within_copy_budget(&gzip(&tar_bytes(&entries)), &entries, "gzipped tar");
+    }
+
+    #[test]
+    fn extracting_a_bare_tar_copies_each_byte_of_content_about_once() {
+        let entries = package(48, 96 * 1024);
+        assert_within_copy_budget(&tar_bytes(&entries), &entries, "bare tar");
+    }
+
+    #[test]
+    fn extracting_a_zip_copies_each_byte_of_content_about_once() {
+        let entries = package(48, 96 * 1024);
+        assert_within_copy_budget(&zip_bytes(&entries), &entries, "zip");
     }
 }
