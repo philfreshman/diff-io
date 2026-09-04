@@ -1,7 +1,7 @@
 use std::collections::hash_map::DefaultHasher;
 use std::collections::{HashMap, HashSet};
 use std::hash::{Hash, Hasher};
-use similar::{ChangeTag, TextDiff, WhitespaceMode};
+use similar::{ChangeTag, DiffOp, TextDiff, WhitespaceMode};
 use crate::types::{DiffFileEntry, DiffStatus, FileMapEntry, FileType};
 
 /// `Exact` is Git's default; `IgnoreAll` is its `-w` — every space, tab and
@@ -564,19 +564,31 @@ impl DiffTreeBuilder {
 
     /// The tree's `+`/`−`, counted the way the file view renders them — or the
     /// two would contradict each other on the same file.
+    ///
+    /// Walks `ops()` — the diff's `Equal`/`Delete`/`Insert` ranges — instead
+    /// of `iter_all_changes()`, which would materialize a `Change` for every
+    /// line of every `Equal` run just to discard it. Only the ranges that
+    /// changed are ever visited; an unchanged run costs one summed length,
+    /// not one step per line.
     fn count_diff(&self, from: &str, to: &str) -> (u32, u32) {
         let diff = TextDiff::configure()
             .whitespace_mode(whitespace_mode(self.ignore_whitespace))
             .diff_lines(from, to);
 
-        let mut added = 0;
-        let mut removed = 0;
+        let mut added: u32 = 0;
+        let mut removed: u32 = 0;
 
-        for change in diff.iter_all_changes() {
-            match change.tag() {
-                ChangeTag::Insert => added += 1,
-                ChangeTag::Delete => removed += 1,
-                _ => {}
+        for op in diff.ops() {
+            match op {
+                DiffOp::Insert { new_len, .. } => added += *new_len as u32,
+                DiffOp::Delete { old_len, .. } => removed += *old_len as u32,
+                DiffOp::Replace {
+                    old_len, new_len, ..
+                } => {
+                    removed += *old_len as u32;
+                    added += *new_len as u32;
+                }
+                DiffOp::Equal { .. } => {}
             }
         }
 
@@ -785,5 +797,159 @@ mod tests {
         let entry = &tree.children.as_ref().unwrap()[0];
         assert!(matches!(entry.status, DiffStatus::Modified));
         assert_eq!((entry.added, entry.removed), (Some(1), Some(1)));
+    }
+
+    /// `n` numbered lines, so a middle section can be replaced while most of
+    /// the file stays one long unchanged run.
+    fn numbered_lines(n: usize) -> String {
+        (0..n).map(|i| format!("line {}\n", i)).collect()
+    }
+
+    fn with_replaced_line(n: usize, at: usize, replacement: &[&str]) -> String {
+        let mut lines: Vec<String> = (0..n).map(|i| format!("line {}", i)).collect();
+        lines.splice(at..at + 1, replacement.iter().map(|s| s.to_string()));
+        let mut out = lines.join("\n");
+        out.push('\n');
+        out
+    }
+
+    /// Counts the `+`/`-` prefixed lines the way a reader counts them by
+    /// eye — `count_diff`'s numbers must agree with what this reads off.
+    fn diff_content_counts(diff_output: &str) -> (u32, u32) {
+        diff_output
+            .split('\n')
+            .skip(2) // the "--- from/..." and "+++ to/..." header lines
+            .fold((0, 0), |(added, removed), line| {
+                match line.as_bytes().first() {
+                    Some(b'+') => (added + 1, removed),
+                    Some(b'-') => (added, removed + 1),
+                    _ => (added, removed),
+                }
+            })
+    }
+
+    #[test]
+    fn count_diff_agrees_with_get_diff_content_for_a_mixed_change() {
+        let from = with_replaced_line(200, 100, &["changed line"]);
+        let to = with_replaced_line(200, 100, &["changed line", "an inserted line"]);
+
+        for ignore_whitespace in [false, true] {
+            let builder = DiffTreeBuilder::new(0.75, ignore_whitespace);
+            let counted = builder.count_diff(&from, &to);
+            let content = get_diff_content("a.rs", &from, &to, ignore_whitespace);
+            assert_eq!(counted, diff_content_counts(&content));
+        }
+    }
+
+    #[test]
+    fn count_diff_agrees_with_get_diff_content_for_a_reformat_under_both_modes() {
+        for ignore_whitespace in [false, true] {
+            let builder = DiffTreeBuilder::new(0.75, ignore_whitespace);
+            let counted = builder.count_diff(FROM, TO);
+            let content = get_diff_content("a.rs", FROM, TO, ignore_whitespace);
+            assert_eq!(counted, diff_content_counts(&content));
+        }
+    }
+
+    /// A single line replaced deep inside a run long enough that most of the
+    /// file is one unchanged block either side of it.
+    #[test]
+    fn count_diff_finds_a_single_replaced_line_in_a_long_unchanged_file() {
+        let from = numbered_lines(300);
+        let to = with_replaced_line(300, 150, &["a completely different line"]);
+
+        let builder = DiffTreeBuilder::new(0.75, false);
+        assert_eq!(builder.count_diff(&from, &to), (1, 1));
+    }
+
+    /// Before/after numbers for issue #152: `cargo test --release
+    /// count_diff_bench -- --ignored --nocapture`. Not run by default —
+    /// this is a timing report, not a correctness check.
+    ///
+    /// `old_count_diff` is the pre-#152 implementation, kept here only so
+    /// this can compare directly against it without touching shipped code.
+    #[test]
+    #[ignore]
+    fn count_diff_bench() {
+        use std::hint::black_box;
+        use std::time::Instant;
+
+        fn old_count_diff(from: &str, to: &str, ignore_whitespace: bool) -> (u32, u32) {
+            let diff = TextDiff::configure()
+                .whitespace_mode(whitespace_mode(ignore_whitespace))
+                .diff_lines(from, to);
+            let mut added = 0;
+            let mut removed = 0;
+            for change in diff.iter_all_changes() {
+                match change.tag() {
+                    ChangeTag::Insert => added += 1,
+                    ChangeTag::Delete => removed += 1,
+                    _ => {}
+                }
+            }
+            (added, removed)
+        }
+
+        fn bench_pair(label: &str, from: &str, to: &str, iterations: u32) {
+            let builder = DiffTreeBuilder::new(0.75, false);
+
+            assert_eq!(
+                old_count_diff(from, to, false),
+                builder.count_diff(from, to),
+                "{label}: old and new counts disagree"
+            );
+
+            let start = Instant::now();
+            for _ in 0..iterations {
+                black_box(old_count_diff(black_box(from), black_box(to), false));
+            }
+            let old_elapsed = start.elapsed();
+
+            let start = Instant::now();
+            for _ in 0..iterations {
+                black_box(builder.count_diff(black_box(from), black_box(to)));
+            }
+            let new_elapsed = start.elapsed();
+
+            println!(
+                "[BENCH] {label}: old {:?}/iter, new {:?}/iter, {:.2}x",
+                old_elapsed / iterations,
+                new_elapsed / iterations,
+                old_elapsed.as_secs_f64() / new_elapsed.as_secs_f64().max(1e-12),
+            );
+        }
+
+        // Shape 1: many files, mostly generated bindings-style content — a
+        // long unchanged run bracketing a small edit. This is the
+        // linux-raw-sys shape the parent issue measured.
+        let bindings_from = numbered_lines(2000);
+        let bindings_to = with_replaced_line(
+            2000,
+            1000,
+            &["a changed binding line", "and an inserted one"],
+        );
+        bench_pair(
+            "bindings-style: 2000 lines, 1 line changed",
+            &bindings_from,
+            &bindings_to,
+            500,
+        );
+
+        // Shape 2: a package with fewer, larger files — a proportionally
+        // large changed block, per the issue's requirement for a second,
+        // differently shaped comparison.
+        let large_from = numbered_lines(20_000);
+        let mut large_to_lines: Vec<String> = (0..20_000).map(|i| format!("line {}", i)).collect();
+        for line in large_to_lines.iter_mut().take(5_500).skip(5_000) {
+            *line = format!("rewritten: {line}");
+        }
+        let mut large_to = large_to_lines.join("\n");
+        large_to.push('\n');
+        bench_pair(
+            "large file: 20000 lines, 500-line block changed",
+            &large_from,
+            &large_to,
+            50,
+        );
     }
 }
