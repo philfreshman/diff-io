@@ -14,7 +14,7 @@ import { createQueryClient } from "#/lib/query/queryClient.ts";
 import { THEME_SCRIPT } from "#/lib/themeScript.ts";
 import { TREE_WIDTH_SCRIPT } from "#/lib/tree/widthScript.ts";
 import { buildDiffBootScript } from "#/lib/worker/bootScript.ts";
-import diffWorkerUrl from "#/lib/worker/diff.worker.ts?worker&url";
+import { engineUrls } from "#/lib/worker/engineUrls.ts";
 import globalsCss from "#/styles/globals.css?url";
 
 /** The site as it describes itself where a route has nothing more specific. */
@@ -34,7 +34,7 @@ const SHARE_IMAGE = "/web-app-manifest-512x512.png";
  * script cannot work out for itself, so the bundler's answer is handed to it
  * here — the same file the client would otherwise have spawned for itself.
  */
-const DIFF_BOOT_SCRIPT = buildDiffBootScript(diffWorkerUrl);
+const DIFF_BOOT_SCRIPT = buildDiffBootScript(engineUrls.worker);
 
 export const Route = createRootRoute({
 	head: () => ({

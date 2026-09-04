@@ -46,6 +46,11 @@ async function handle(request: WorkerRequest): Promise<unknown> {
 	}
 }
 
+// Started here rather than on the first message: the module is fetched and
+// instantiated while the page is still spawning us, so a request that arrives
+// a moment later waits on nothing.
+ensureWasm();
+
 self.onmessage = async (event: MessageEvent<WorkerRequest>) => {
 	const request = event.data;
 	try {
