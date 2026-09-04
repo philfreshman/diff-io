@@ -22,7 +22,8 @@
 		"badge": "fallow health --format badge > .github/badges/fallow-health.svg",
 		"check:badge": "fallow health --format badge | diff -u .github/badges/fallow-health.svg -",
 		"fallow": "fallow",
-		"fallow:audit": "fallow audit"
+		"fallow:audit": "fallow audit",
+		"prepare": "husky"
 	},
 	"dependencies": {
 		"@base-ui/react": "1.7.0",
