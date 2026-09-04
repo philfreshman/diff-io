@@ -88,6 +88,7 @@ function ExpandButton({
 			}
 			className={styles.expander}
 			onClick={() => onReveal(expander)}
+			style={expander.direction === "all" && { width: 30 }}
 		>
 			<Arrow height="14" width="14" />
 		</IconButton>

@@ -15,7 +15,7 @@
 	min-height: 0;
 	flex-direction: column;
 	border: 1px solid var(--color-border);
-	border-radius: var(--radius-lg);
+	border-radius: var(--radius-md);
 	background: var(--color-background);
 	overflow: hidden;
 }
@@ -33,7 +33,6 @@
 	flex: 1;
 	min-height: 0;
 	overflow: auto;
-	padding: var(--space-2) 0;
 	/* The file's scrollbar is drawn over this one — see DiffScrollbar — and two
 	   of them would only compete for the same edge. */
 	scrollbar-width: none;

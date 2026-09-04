@@ -26,18 +26,20 @@
 	flex: 1;
 	min-width: 0;
 	align-items: center;
+	padding: 0;
 	gap: var(--space-2);
-	padding: 0 var(--space-3);
 	font-style: italic;
 	white-space: nowrap;
 	overflow: hidden;
 }
 
 .expander {
-	height: auto;
+	height: 100%;
+	width: 100%;
 	min-height: 0;
 	padding: 0 var(--space-1);
 	color: inherit;
+	border-radius: 0;
 }
 
 .expander:hover,
