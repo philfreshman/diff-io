@@ -13,6 +13,10 @@
 //! every node's path, status, `oldPath` and counts, hashed in tree order.
 //! Two builds that print the same fingerprint built the same tree, which is
 //! the no-regression check a performance change needs alongside its numbers.
+//! One caveat: a file whose search runs past the deadline in `core.rs` is
+//! cut where the clock says, so on a pair with such a file two runs can
+//! build two trees and the determinism check below fires. That is the
+//! deadline, not the builder; no pair in #148 reaches it natively.
 //!
 //! Numbers here are native numbers. They rank Rust-side changes against each
 //! other without a browser in the loop; they are not the wasm figures the

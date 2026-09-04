@@ -1,6 +1,71 @@
 use std::collections::{HashMap, HashSet};
+use std::time::Duration;
 use similar::{ChangeTag, DiffOp, TextDiff, WhitespaceMode};
 use crate::types::{DiffFileEntry, DiffStatus, FileMapEntry, FileType};
+
+/// How long the tree pass lets one file's diff search run. When it fires,
+/// `similar` stops splitting and reports whatever range it was still
+/// searching as one block removed and one block added; everything it had
+/// already settled — the common prefix and suffix, the snakes found so far —
+/// stands.
+///
+/// Myers is `O((N+M)·D)`, and a regenerated file pays for both. On
+/// `tree-sitter-typescript 0.21.2 → 0.23.2` each of the two 290k-line
+/// `parser.c` files takes 1.1 s in a focused Chrome window and 4.1 s in a
+/// background tab, where the worker is scheduled onto slower cores — 8.1 s
+/// of an 8.1 s tree pass, once 18 s — to settle a count within 32 lines of
+/// "every line changed": the search finds a near-total rewrite in its
+/// first tenth and spends the rest confirming it. Cut at this bound, that
+/// file's tally moves by those 32 lines.
+///
+/// Two seconds is about twice the slowest *partial* change measured —
+/// `lib/tsc.js` in `typescript 5.4.5 → 5.5.4`, 128k lines with 12 % changed,
+/// 0.6–1.0 s in that background tab — and that margin is the point. A partial
+/// change cut short is not off by a few lines: the range still being
+/// searched becomes one replaced block, so `tsc.js` stopped at half its
+/// search reads `+118142 −116454` for `+16528 −14840`. The bound has to sit
+/// where only rewrites reach it, on a machine slower than the one measured.
+/// A file that does hit it gets a coarser count than the file view's — see
+/// [`FILE_VIEW_DIFF_TIMEOUT`] for that decision.
+pub const TREE_DIFF_TIMEOUT: Duration = Duration::from_secs(2);
+
+/// How long the file view lets the one file the reader asked for run.
+/// Longer than the tree's, so the rendered diff is the exact one wherever
+/// the tree's count was cut short. Ten seconds is past every file measured
+/// — `parser.c` above renders in 1.1 s in a focused Chrome window and took
+/// 4.0–9.8 s in a background tab — and it is a bound on the pathological
+/// file, not on that one: a wait past it reads as a hang, and the search it
+/// cuts short has already found what the reader will see.
+///
+/// The decision this carries: **for a file that hits the tree's deadline,
+/// the tree's `+`/`−` may disagree with the file view's.** Accepted, on two
+/// grounds. The only files measured to reach a two-second search are
+/// near-total rewrites, where the two tallies differ by tens of lines in
+/// hundreds of thousands. And a deadline is wall-clock, so even one value on
+/// both sides would not make them agree by construction — only a bound
+/// neither side ever reaches would, which is the unbounded wait this
+/// replaces. Everywhere the tree's deadline does not fire, the two counts
+/// are the same computation as before.
+pub const FILE_VIEW_DIFF_TIMEOUT: Duration = Duration::from_secs(10);
+
+/// Below this many bytes across both sides, no deadline is set at all.
+///
+/// A deadline is not free: `similar` reads the clock once per step of the
+/// search, and on wasm each read is a call out to `performance.now()`. Set
+/// on every file, that was 14 % of `linux-raw-sys 0.6.5 → 0.12.1`'s tree
+/// pass — 275 files, none over 400 KB, none within a tenth of the bound.
+///
+/// The gate keeps the bound whole. The slowest per-line rate measured is
+/// about 13 µs, on a full rewrite in a background tab; a megabyte of source
+/// is some 25k lines, and even at that rate it is under half a second — it
+/// cannot reach [`TREE_DIFF_TIMEOUT`] on any machine within a few times
+/// this one.
+const DEADLINE_MIN_BYTES: usize = 1 << 20;
+
+/// The timeout to set for this pair of contents, if one is worth setting.
+fn diff_timeout(from: &str, to: &str, timeout: Duration) -> Option<Duration> {
+    (from.len() + to.len() >= DEADLINE_MIN_BYTES).then_some(timeout)
+}
 
 /// `Exact` is Git's default; `IgnoreAll` is its `-w` — every space, tab and
 /// line-ending character disregarded. There is no third choice on offer,
@@ -46,9 +111,12 @@ pub fn get_diff_content(
     to_content: &str,
     ignore_whitespace: bool,
 ) -> String {
-    let diff = TextDiff::configure()
-        .whitespace_mode(whitespace_mode(ignore_whitespace))
-        .diff_lines(from_content, to_content);
+    let mut config = TextDiff::configure();
+    config.whitespace_mode(whitespace_mode(ignore_whitespace));
+    if let Some(timeout) = diff_timeout(from_content, to_content, FILE_VIEW_DIFF_TIMEOUT) {
+        config.timeout(timeout);
+    }
+    let diff = config.diff_lines(from_content, to_content);
     let mut result = format!("--- from/{}\n+++ to/{}", filename, filename);
     for change in diff.iter_all_changes() {
         let sign = match change.tag() {
@@ -70,9 +138,12 @@ pub fn get_diff_content(
 /// A file's `+`/`−` as the tree reports them. `count_op_lines` explains why
 /// summing op ranges is the same tally the file view reads.
 pub fn count_diff_lines(from: &str, to: &str, ignore_whitespace: bool) -> (u32, u32) {
-    let diff = TextDiff::configure()
-        .whitespace_mode(whitespace_mode(ignore_whitespace))
-        .diff_lines(from, to);
+    let mut config = TextDiff::configure();
+    config.whitespace_mode(whitespace_mode(ignore_whitespace));
+    if let Some(timeout) = diff_timeout(from, to, TREE_DIFF_TIMEOUT) {
+        config.timeout(timeout);
+    }
+    let diff = config.diff_lines(from, to);
 
     let (added, removed, _) = count_op_lines(diff.ops());
     // Saturating rather than `as`: a lossy cast would silently wrap a
@@ -346,7 +417,15 @@ impl<'a> DiffTreeBuilder<'a> {
             return 0.0;
         }
 
-        let diff = TextDiff::from_lines(from, to);
+        // The tree's bound, for the same reason: a candidate's search is
+        // part of the tree pass. A cut-short search reads as less similar,
+        // which can only fail to pair two files the Jaccard filter already
+        // found alike — and those diffs are short precisely because they are.
+        let mut config = TextDiff::configure();
+        if let Some(timeout) = diff_timeout(from, to, TREE_DIFF_TIMEOUT) {
+            config.timeout(timeout);
+        }
+        let diff = config.diff_lines(from, to);
 
         let (added, removed, unchanged) = count_op_lines(diff.ops());
 
