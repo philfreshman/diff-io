@@ -128,8 +128,8 @@ fn run() -> Result<(), String> {
 
         let t = Instant::now();
         let tree = build_diff_tree(
-            from_files,
-            to_files,
+            &from_files,
+            &to_files,
             SIMILARITY_THRESHOLD,
             args.ignore_whitespace,
         );
