@@ -59,17 +59,3 @@ export type WorkerRequestInput = WorkerRequest extends infer T
 export type WorkerResponse =
 	| { id: number; ok: true; data: unknown }
 	| { id: number; ok: false; error: string };
-
-/**
- * [BENCH] Instrumentation only — see philfreshman/diffpack#148. The worker's
- * console is not the page's, so a phase timed inside the worker has to be
- * echoed across `postMessage` or the harness never sees it. Strip with the
- * rest of the `[BENCH]` seams once the numbers are recorded.
- */
-export type BenchMessage = { bench: string; ms: number };
-
-export function isBenchMessage(
-	message: WorkerResponse | BenchMessage,
-): message is BenchMessage {
-	return "bench" in message;
-}

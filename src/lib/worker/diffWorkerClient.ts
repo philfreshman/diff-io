@@ -1,13 +1,11 @@
 import { type DiffBoot, readDiffBoot } from "./bootScript.ts";
-import {
-	type BenchMessage,
-	type DiffFileEntry,
-	type DiffRequest,
-	type FileDiff,
-	isBenchMessage,
-	type WorkerRequest,
-	type WorkerRequestInput,
-	type WorkerResponse,
+import type {
+	DiffFileEntry,
+	DiffRequest,
+	FileDiff,
+	WorkerRequest,
+	WorkerRequestInput,
+	WorkerResponse,
 } from "./protocol.ts";
 
 type Pending = {
@@ -52,14 +50,7 @@ export function createDiffClient(
 	let adopted: { request: Comparison; tree: Promise<DiffFileEntry> } | null =
 		null;
 
-	function receive(message: WorkerResponse | BenchMessage) {
-		// [BENCH] Instrumentation only — see philfreshman/diffpack#148: the
-		// worker's console is not the page's, so its phases arrive as messages.
-		if (isBenchMessage(message)) {
-			console.log(`[BENCH] ${message.bench} ${message.ms.toFixed(1)}ms`);
-			return;
-		}
-
+	function receive(message: WorkerResponse) {
 		const entry = pending.get(message.id);
 		if (!entry) return;
 		pending.delete(message.id);
@@ -102,7 +93,7 @@ export function createDiffClient(
 		worker.onmessage = (event) => receive(event.data);
 		// Everything the script's own handler caught while no client existed.
 		for (const reply of booted.replies) {
-			receive(reply as WorkerResponse | BenchMessage);
+			receive(reply as WorkerResponse);
 		}
 
 		return worker;

@@ -47,10 +47,6 @@ const REGISTRY_IDS = registryAdapters.map((adapter) => adapter.id);
  * and the shape of a `build-tree` request, which is `protocol.ts`. The values
  * they turn on are interpolated from those modules so they stay single-sourced.
  *
- * The `[BENCH]` line is instrumentation only — see philfreshman/diffpack#148:
- * it is the phase this whole script exists to move, and the session's own
- * `page-load-to-build-tree` no longer measures it. Strip it with the rest.
- *
  * Restating is what makes it possible to get this wrong, and the cost of
  * getting it wrong is bounded: a request the session does not recognise as its
  * own is simply not adopted, and the session issues the right one itself.
@@ -75,7 +71,6 @@ var worker=new Worker(${JSON.stringify(workerUrl)},{type:"module"});
 var boot={worker:worker,id:0,request:request,replies:[]};
 worker.onmessage=function(event){boot.replies.push(event.data)};
 worker.postMessage({id:boot.id,type:"build-tree",registry:registry,pkg:pkg,from:from,to:to,ignoreWhitespace:ignoreWhitespace});
-console.log("[BENCH] boot-build-tree "+performance.now().toFixed(1)+"ms");
 window.${DIFF_BOOT_GLOBAL}=boot;
 }catch(e){}})();`;
 }
