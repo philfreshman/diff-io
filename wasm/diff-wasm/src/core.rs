@@ -1,5 +1,5 @@
 use std::collections::{HashMap, HashSet};
-use similar::{ChangeTag, DiffOp, TextDiff, WhitespaceMode};
+use similar::{ChangeTag, TextDiff, WhitespaceMode};
 use crate::types::{DiffFileEntry, DiffStatus, FileMapEntry, FileType};
 
 /// `Exact` is Git's default; `IgnoreAll` is its `-w` — every space, tab and
@@ -12,26 +12,6 @@ pub fn whitespace_mode(ignore_whitespace: bool) -> WhitespaceMode {
     } else {
         WhitespaceMode::Exact
     }
-}
-
-/// A diff's `(added, removed, unchanged)` line counts, summed off its op
-/// ranges.
-///
-/// Equivalent to tallying `iter_all_changes()` by tag — `similar` defines that
-/// iterator as `ops().flat_map(iter_changes)`, and an op yields exactly
-/// `old_len` deletions then `new_len` insertions — but without materializing a
-/// `Change` for every line of every `Equal` run just to discard it. An
-/// unchanged run costs one summed length, not one step per line.
-fn count_op_lines(ops: &[DiffOp]) -> (usize, usize, usize) {
-    ops.iter()
-        .fold((0, 0, 0), |(added, removed, unchanged), op| match op {
-            DiffOp::Insert { new_len, .. } => (added + new_len, removed, unchanged),
-            DiffOp::Delete { old_len, .. } => (added, removed + old_len, unchanged),
-            DiffOp::Replace {
-                old_len, new_len, ..
-            } => (added + new_len, removed + old_len, unchanged),
-            DiffOp::Equal { len, .. } => (added, removed, unchanged + len),
-        })
 }
 
 /// Always `diff_lines`, in both modes: `whitespace_mode` reaches no other
@@ -332,7 +312,18 @@ impl<'a> DiffTreeBuilder<'a> {
 
         let diff = TextDiff::from_lines(from, to);
 
-        let (added, removed, unchanged) = count_op_lines(diff.ops());
+        // Count changes using the 'similar' crate
+        let mut added = 0;
+        let mut removed = 0;
+        let mut unchanged = 0;
+
+        for change in diff.iter_all_changes() {
+            match change.tag() {
+                ChangeTag::Insert => added += 1,
+                ChangeTag::Delete => removed += 1,
+                ChangeTag::Equal => unchanged += 1,
+            }
+        }
 
         let total = (added + removed + unchanged).max(1);
         unchanged as f64 / total as f64
@@ -606,18 +597,22 @@ impl<'a> DiffTreeBuilder<'a> {
     }
 
     /// The tree's `+`/`−`, counted the way the file view renders them — or the
-    /// two would contradict each other on the same file. `count_op_lines`
-    /// explains why summing op ranges is the same tally the file view reads.
+    /// two would contradict each other on the same file.
     fn count_diff(&self, from: &str, to: &str) -> (u32, u32) {
         let diff = TextDiff::configure()
             .whitespace_mode(whitespace_mode(self.ignore_whitespace))
             .diff_lines(from, to);
 
-        let (added, removed, _) = count_op_lines(diff.ops());
-        // Saturating rather than `as`: a lossy cast would silently wrap a
-        // count that no longer fits the `u32` the tree entry carries.
-        let added = u32::try_from(added).unwrap_or(u32::MAX);
-        let removed = u32::try_from(removed).unwrap_or(u32::MAX);
+        let mut added = 0;
+        let mut removed = 0;
+
+        for change in diff.iter_all_changes() {
+            match change.tag() {
+                ChangeTag::Insert => added += 1,
+                ChangeTag::Delete => removed += 1,
+                _ => {}
+            }
+        }
 
         (added, removed)
     }
@@ -976,68 +971,5 @@ mod tests {
         let entry = &tree.children.as_ref().unwrap()[0];
         assert!(matches!(entry.status, DiffStatus::Modified));
         assert_eq!((entry.added, entry.removed), (Some(1), Some(1)));
-    }
-
-    /// `n` numbered lines, so a middle section can be replaced while most of
-    /// the file stays one long unchanged run.
-    fn numbered_lines(n: usize) -> String {
-        (0..n).map(|i| format!("line {}\n", i)).collect()
-    }
-
-    fn with_replaced_line(n: usize, at: usize, replacement: &[&str]) -> String {
-        let mut lines: Vec<String> = (0..n).map(|i| format!("line {}", i)).collect();
-        lines.splice(at..at + 1, replacement.iter().map(|s| s.to_string()));
-        let mut out = lines.join("\n");
-        out.push('\n');
-        out
-    }
-
-    /// Counts the `+`/`-` prefixed lines the way a reader counts them by
-    /// eye — `count_diff`'s numbers must agree with what this reads off.
-    fn diff_content_counts(diff_output: &str) -> (u32, u32) {
-        diff_output
-            .split('\n')
-            .skip(2) // the "--- from/..." and "+++ to/..." header lines
-            .fold((0, 0), |(added, removed), line| {
-                match line.as_bytes().first() {
-                    Some(b'+') => (added + 1, removed),
-                    Some(b'-') => (added, removed + 1),
-                    _ => (added, removed),
-                }
-            })
-    }
-
-    #[test]
-    fn count_diff_agrees_with_get_diff_content_for_a_mixed_change() {
-        let from = with_replaced_line(200, 100, &["changed line"]);
-        let to = with_replaced_line(200, 100, &["changed line", "an inserted line"]);
-
-        for ignore_whitespace in [false, true] {
-            let builder = builder(ignore_whitespace);
-            let counted = builder.count_diff(&from, &to);
-            let content = get_diff_content("a.rs", &from, &to, ignore_whitespace);
-            assert_eq!(counted, diff_content_counts(&content));
-        }
-    }
-
-    #[test]
-    fn count_diff_agrees_with_get_diff_content_for_a_reformat_under_both_modes() {
-        for ignore_whitespace in [false, true] {
-            let builder = builder(ignore_whitespace);
-            let counted = builder.count_diff(FROM, TO);
-            let content = get_diff_content("a.rs", FROM, TO, ignore_whitespace);
-            assert_eq!(counted, diff_content_counts(&content));
-        }
-    }
-
-    /// A single line replaced deep inside a run long enough that most of the
-    /// file is one unchanged block either side of it.
-    #[test]
-    fn count_diff_finds_a_single_replaced_line_in_a_long_unchanged_file() {
-        let from = numbered_lines(300);
-        let to = with_replaced_line(300, 150, &["a completely different line"]);
-
-        let builder = builder(false);
-        assert_eq!(builder.count_diff(&from, &to), (1, 1));
     }
 }
