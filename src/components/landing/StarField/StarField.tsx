@@ -1,5 +1,4 @@
 import { useEffect, useRef, useState } from "react";
-import * as THREE from "three";
 import { useResolvedTheme } from "#/components/theme/useResolvedTheme.ts";
 import { CLOUD_GLSL } from "#/lib/starfield/clouds.ts";
 import { BLUE, COSMOS_GLSL, hueAt, PURPLE } from "#/lib/starfield/cosmos.ts";
@@ -10,6 +9,15 @@ import {
 	generateMarks,
 	MARK_COUNT,
 } from "#/lib/starfield/field.ts";
+import { quad, sphere } from "#/lib/starfield/geometry.ts";
+import {
+	compose,
+	mat4,
+	type Mat4,
+	multiply,
+	perspective,
+} from "#/lib/starfield/matrix.ts";
+import { createRenderer, type Mesh } from "#/lib/starfield/webgl.ts";
 import styles from "./StarField.module.css";
 
 /**
@@ -23,6 +31,11 @@ import styles from "./StarField.module.css";
  * The backdrop under it all is `--cosmic-backdrop` reproduced in GLSL, because
  * the canvas covers the CSS one. If WebGL is unavailable the canvas is dropped
  * and the CSS gradient is what the visitor gets.
+ *
+ * The four shaders below are the whole scene; `lib/starfield/webgl.ts` is the
+ * little that sits under them. There is no 3D engine here on purpose — the
+ * sky's arrival is gated on its own JavaScript downloading, and an engine is
+ * half a megabyte of features this scene does not use.
  */
 const FOV = 60;
 /** Marks are out of sight before the wrap at `FIELD_HALF` can be seen happening. */
@@ -37,6 +50,9 @@ const SHOOTING_MIN_MS = 14000;
 const SHOOTING_MAX_MS = 30000;
 const SHOOTING_LIFETIME_MS = 3000;
 const SHOOTING_POOL = 2;
+
+/** The field sits at the world origin and never moves; the camera does. */
+const IDENTITY = mat4();
 
 const MARK_VERTEX = /* glsl */ `
 attribute float aSize;
@@ -136,14 +152,47 @@ void main() {
 }
 `;
 
+const BACKDROP_FRAGMENT = /* glsl */ `
+varying vec2 vUv;
+uniform vec2 uRes;
+uniform float uHue;
+${COSMOS_GLSL}
+void main() {
+	gl_FragColor = vec4(cosmicBackdrop(vec2(vUv.x, 1.0 - vUv.y), uRes, uHue), 1.0);
+}
+`;
+
+const CLOUD_VERTEX = /* glsl */ `
+varying vec3 vDir;
+void main() {
+	vDir = position;
+	gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+}
+`;
+
+const CLOUD_FRAGMENT = /* glsl */ `
+varying vec3 vDir;
+uniform float uTime;
+uniform vec3 uFlow;
+uniform vec3 uPurple;
+uniform vec3 uBlue;
+${CLOUD_GLSL}
+void main() {
+	gl_FragColor = vec4(
+		nebula(normalize(vDir), uTime, uFlow, uPurple, uBlue),
+		1.0
+	);
+}
+`;
+
+/** One shooting star's flight, in world units. */
 interface Streak {
-	mesh: THREE.Mesh<THREE.PlaneGeometry, THREE.ShaderMaterial>;
-	/* The uniform object is held rather than read back off the material:
-	   `uniforms` is an index signature, so every read would need a null check. */
-	alpha: { value: number };
 	startedAt: number;
-	from: THREE.Vector3;
+	fromX: number;
+	fromY: number;
+	fromZ: number;
 	travel: number;
+	halfHeight: number;
 }
 
 export function StarField() {
@@ -161,100 +210,64 @@ export function StarField() {
 		// the preference has to be honoured here: draw the sky once and stop.
 		const still = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
-		let renderer: THREE.WebGLRenderer;
-		try {
-			renderer = new THREE.WebGLRenderer({
-				canvas,
-				antialias: false,
-				// Only when the sky is a single frame that is never redrawn: the
-				// drawing buffer is otherwise undefined after the browser composites
-				// it, and a still sky has nothing to put back.
-				preserveDrawingBuffer: still,
-			});
-		} catch {
+		// Only when the sky is a single frame that is never redrawn: the drawing
+		// buffer is otherwise undefined after the browser composites it, and a
+		// still sky has nothing to put back.
+		const renderer = createRenderer(canvas, { preserveDrawingBuffer: still });
+		if (!renderer) {
 			// No WebGL. The CSS `--cosmic-backdrop` behind this canvas is the
 			// fallback, so the canvas just gets out of its way.
 			setWebglFailed(true);
 			return;
 		}
 
-		renderer.setClearColor(0x000000, 1);
-		const scene = new THREE.Scene();
-		const camera = new THREE.PerspectiveCamera(FOV, 1, 0.1, 400);
-		scene.add(camera);
+		// --- the camera ---------------------------------------------------------
+		// It only ever slides; nothing rotates it. So the view matrix is a
+		// translation, and "forwards" stays -z for the whole session.
+		const projection = mat4();
+		const view = mat4();
+		const model = mat4();
+		const modelView = mat4();
 
-		// --- the backdrop, riding on the camera so it stays glued to the screen --
-		const uRes = { value: new THREE.Vector2(1, 1) };
-		const uHue = { value: 0 };
-		const backdropMaterial = new THREE.ShaderMaterial({
-			uniforms: { uRes, uHue },
-			vertexShader: SPRITE_VERTEX,
-			fragmentShader: /* glsl */ `
-				varying vec2 vUv;
-				uniform vec2 uRes;
-				uniform float uHue;
-				${COSMOS_GLSL}
-				void main() {
-					gl_FragColor = vec4(cosmicBackdrop(vec2(vUv.x, 1.0 - vUv.y), uRes, uHue), 1.0);
-				}
-			`,
-			depthTest: false,
-			depthWrite: false,
+		// --- the backdrop, glued to the screen rather than to the world ----------
+		// It rides at a fixed depth in front of the camera, so its model-view
+		// matrix is the same however far the camera has slid.
+		const backdropGeometry = quad();
+		const uRes = new Float32Array(2);
+		const backdropView = mat4();
+		const backdrop = renderer.mesh({
+			vertex: SPRITE_VERTEX,
+			fragment: BACKDROP_FRAGMENT,
+			attributes: {
+				position: { data: backdropGeometry.position, size: 3 },
+				uv: { data: backdropGeometry.uv, size: 2 },
+			},
+			index: backdropGeometry.index,
+			mode: "triangles",
+			blend: "none",
 		});
-		const backdrop = new THREE.Mesh(
-			new THREE.PlaneGeometry(1, 1),
-			backdropMaterial,
-		);
-		backdrop.position.z = -1;
-		backdrop.renderOrder = -2;
-		camera.add(backdrop);
 
-		// --- the clouds, on a sphere the camera never leaves --------------------
+		// --- the clouds, on a sphere the camera never leaves ---------------------
 		// The drift moves the field, not the camera, so a sphere at the origin
 		// stays around the viewer however long the page is left open.
-		const uCloudTime = { value: 0 };
-		const uCloudFlow = { value: new THREE.Vector3() };
-		const cloudGeometry = new THREE.SphereGeometry(CLOUD_RADIUS, 48, 24);
-		const cloudMaterial = new THREE.ShaderMaterial({
-			uniforms: {
-				uTime: uCloudTime,
-				uFlow: uCloudFlow,
-				uPurple: { value: new THREE.Color(...PURPLE) },
-				uBlue: { value: new THREE.Color(...BLUE) },
-			},
-			vertexShader: /* glsl */ `
-				varying vec3 vDir;
-				void main() {
-					vDir = position;
-					gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
-				}
-			`,
-			fragmentShader: /* glsl */ `
-				varying vec3 vDir;
-				uniform float uTime;
-				uniform vec3 uFlow;
-				uniform vec3 uPurple;
-				uniform vec3 uBlue;
-				${CLOUD_GLSL}
-				void main() {
-					gl_FragColor = vec4(
-						nebula(normalize(vDir), uTime, uFlow, uPurple, uBlue),
-						1.0
-					);
-				}
-			`,
-			side: THREE.BackSide,
-			depthTest: false,
-			depthWrite: false,
-			transparent: true,
-			blending: THREE.AdditiveBlending,
-		});
-		const clouds = new THREE.Mesh(cloudGeometry, cloudMaterial);
+		const cloudGeometry = sphere(CLOUD_RADIUS, 48, 24);
+		const uCloudFlow = new Float32Array(3);
+		const uPurple = new Float32Array(PURPLE);
+		const uBlue = new Float32Array(BLUE);
 		// Tilted, so the band in the cloud shader does not lie flat across the
 		// middle of the screen looking like a seam.
-		clouds.rotation.set(0.16, 0, 0.42);
-		clouds.renderOrder = -1;
-		scene.add(clouds);
+		const cloudModel = compose(mat4(), 0, 0, 0, 0.16, 0, 0.42, 1, 1, 1);
+		const clouds = renderer.mesh({
+			vertex: CLOUD_VERTEX,
+			fragment: CLOUD_FRAGMENT,
+			attributes: {
+				position: { data: cloudGeometry.position, size: 3 },
+			},
+			index: cloudGeometry.index,
+			mode: "triangles",
+			blend: "additive",
+			facing: "inside",
+		});
 
 		// --- the field ----------------------------------------------------------
 		const rng = createRng(FIELD_SEED);
@@ -276,135 +289,142 @@ export function StarField() {
 			pluses[i] = mark.plus ? 1 : 0;
 		}
 
-		const geometry = new THREE.BufferGeometry();
-		geometry.setAttribute("position", new THREE.BufferAttribute(positions, 3));
-		geometry.setAttribute("aSize", new THREE.BufferAttribute(sizes, 1));
-		geometry.setAttribute("aPhase", new THREE.BufferAttribute(phases, 1));
-		geometry.setAttribute("aPeriod", new THREE.BufferAttribute(periods, 1));
-		geometry.setAttribute("aPlus", new THREE.BufferAttribute(pluses, 1));
-		// The cube wraps, so three.js must not cull it against a bounding box that
-		// only describes where the marks started.
-		geometry.boundingSphere = new THREE.Sphere(
-			new THREE.Vector3(),
-			FIELD_HALF * 2,
-		);
-
-		const uTime = { value: 0 };
-		const uPixelRatio = { value: 1 };
-		const uOffset = { value: new THREE.Vector3() };
-		const markMaterial = new THREE.ShaderMaterial({
-			uniforms: { uTime, uPixelRatio, uOffset },
-			vertexShader: MARK_VERTEX,
-			fragmentShader: MARK_FRAGMENT,
-			transparent: true,
-			depthTest: false,
-			depthWrite: false,
-			blending: THREE.AdditiveBlending,
+		const uOffset = new Float32Array(3);
+		const field = renderer.mesh({
+			vertex: MARK_VERTEX,
+			fragment: MARK_FRAGMENT,
+			attributes: {
+				position: { data: positions, size: 3 },
+				aSize: { data: sizes, size: 1 },
+				aPhase: { data: phases, size: 1 },
+				aPeriod: { data: periods, size: 1 },
+				aPlus: { data: pluses, size: 1 },
+			},
+			mode: "points",
+			blend: "additive",
 		});
-		scene.add(new THREE.Points(geometry, markMaterial));
 
 		// --- shooting stars -----------------------------------------------------
-		const streakGeometry = new THREE.PlaneGeometry(1, 1);
+		// One quad, drawn once per star in flight: they differ only by transform
+		// and opacity, which are uniforms.
+		const streakGeometry = quad();
+		const streak = renderer.mesh({
+			vertex: SPRITE_VERTEX,
+			fragment: STREAK_FRAGMENT,
+			attributes: {
+				position: { data: streakGeometry.position, size: 3 },
+				uv: { data: streakGeometry.uv, size: 2 },
+			},
+			index: streakGeometry.index,
+			mode: "triangles",
+			blend: "additive",
+		});
 		const streaks: Streak[] = [];
-		const idle: Streak[] = [];
-		for (let i = 0; i < SHOOTING_POOL; i += 1) {
-			const uAlpha = { value: 0 };
-			const mesh = new THREE.Mesh(
-				streakGeometry,
-				new THREE.ShaderMaterial({
-					uniforms: { uAlpha },
-					vertexShader: SPRITE_VERTEX,
-					fragmentShader: STREAK_FRAGMENT,
-					transparent: true,
-					depthTest: false,
-					depthWrite: false,
-					blending: THREE.AdditiveBlending,
-				}),
-			);
-			mesh.visible = false;
-			// Down and to the right.
-			mesh.rotation.z = -Math.PI / 4;
-			scene.add(mesh);
-			idle.push({
-				mesh,
-				alpha: uAlpha,
-				startedAt: 0,
-				from: new THREE.Vector3(),
-				travel: 0,
-			});
-		}
 
 		let width = 1;
 		let height = 1;
+		let pixelRatio = 1;
 		const halfHeightAt = (z: number) =>
 			Math.tan((FOV * Math.PI) / 360) * Math.abs(z);
 
 		const resize = () => {
 			width = canvas.clientWidth;
 			height = canvas.clientHeight;
-			const ratio = Math.min(window.devicePixelRatio || 1, 2);
-			renderer.setPixelRatio(ratio);
-			renderer.setSize(width, height, false);
-			camera.aspect = width / height;
-			camera.updateProjectionMatrix();
-			uPixelRatio.value = ratio;
-			uRes.value.set(width, height);
+			pixelRatio = Math.min(window.devicePixelRatio || 1, 2);
+			renderer.resize(width, height, pixelRatio);
+			perspective(projection, FOV, width / height, 0.1, 400);
+			uRes[0] = width;
+			uRes[1] = height;
 			const h = 2 * halfHeightAt(1);
-			backdrop.scale.set(h * camera.aspect, h, 1);
+			compose(backdropView, 0, 0, -1, 0, 0, 0, (h * width) / height, h, 1);
 		};
 
 		const launch = (now: number) => {
-			const streak = idle.pop();
-			if (!streak) return;
+			if (streaks.length >= SHOOTING_POOL) return;
 			const z = -10 - rng() * 26;
 			const halfH = halfHeightAt(z);
 			const halfW = halfH * (width / height);
 			// Shooting stars start in the upper-left quadrant and travel down-right.
-			streak.from.set(-halfW + rng() * halfW, halfH - rng() * halfH, z);
-			// 300px of screen travel, expressed at this star's depth.
-			streak.travel = (300 / height) * halfH * 2;
-			streak.startedAt = now;
-			streak.mesh.visible = true;
-			streak.mesh.scale.set(halfH * 0.5, halfH * 0.012, 1);
-			streaks.push(streak);
+			streaks.push({
+				startedAt: now,
+				fromX: -halfW + rng() * halfW,
+				fromY: halfH - rng() * halfH,
+				fromZ: z,
+				// 300px of screen travel, expressed at this star's depth.
+				travel: (300 / height) * halfH * 2,
+				halfHeight: halfH,
+			});
 		};
 
-		const pointer = new THREE.Vector2(0, 0);
-		const target = new THREE.Vector2(0, 0);
+		let pointerX = 0;
+		let pointerY = 0;
+		let targetX = 0;
+		let targetY = 0;
 		const onPointerMove = (event: PointerEvent) => {
-			target.set(
-				(event.clientX / window.innerWidth) * 2 - 1,
-				(event.clientY / window.innerHeight) * 2 - 1,
-			);
+			targetX = (event.clientX / window.innerWidth) * 2 - 1;
+			targetY = (event.clientY / window.innerHeight) * 2 - 1;
 		};
 
 		let last = 0;
 		let nextLaunchAt = Number.POSITIVE_INFINITY;
+		/** How far the field has been travelled through, in world units. */
+		let drift = 0;
+
+		const drawWith = (mesh: Mesh, local: Mat4, uniforms: object) => {
+			multiply(modelView, view, local);
+			mesh.draw({
+				projectionMatrix: projection,
+				modelViewMatrix: modelView,
+				...uniforms,
+			});
+		};
 
 		const draw = (now: number) => {
 			const dt = last === 0 ? 0 : Math.min((now - last) / 1000, 0.05);
 			last = now;
 
 			const t = now / 1000;
-			uTime.value = now;
-			uHue.value = hueAt(t);
-			uCloudTime.value = t;
 
 			// The camera slides against the pointer and never turns: the view comes
 			// back to where it was, and only the parallax between near and far marks
 			// says anything happened. Both axes are inverted — the camera moves away
 			// from the cursor, so the field drifts towards it.
-			pointer.lerp(target, 0.03);
-			camera.position.x = -pointer.x * 0.5 + Math.sin(t / 17) * 0.5;
-			camera.position.y = pointer.y * 0.3 + Math.cos(t / 23) * 0.35;
+			pointerX += (targetX - pointerX) * 0.03;
+			pointerY += (targetY - pointerY) * 0.03;
+			const cameraX = -pointerX * 0.5 + Math.sin(t / 17) * 0.5;
+			const cameraY = pointerY * 0.3 + Math.cos(t / 23) * 0.35;
+			// A camera that only translates inverts to the opposite translation.
+			compose(view, -cameraX, -cameraY, 0, 0, 0, 0, 1, 1, 1);
 
-			// Forwards is always -z, since nothing rotates the camera.
-			uOffset.value.z += DRIFT_SPEED * dt;
-			// Kept small: the offset is taken modulo the cube anyway, and letting it
-			// grow all session would eat float precision.
-			uOffset.value.z %= FIELD_HALF * 2;
+			// Forwards is always -z, since nothing rotates the camera. Kept small:
+			// the offset is taken modulo the cube in the shader anyway, and letting
+			// it grow all session would eat float precision.
+			drift = (drift + DRIFT_SPEED * dt) % (FIELD_HALF * 2);
+			uOffset[2] = drift;
 			// The clouds drift with the travel rather than on a clock of their own.
-			uCloudFlow.value.set(0, 0, uOffset.value.z * 0.004);
+			uCloudFlow[2] = drift * 0.004;
+
+			renderer.clear();
+
+			// The backdrop is opaque and goes down first; everything after it adds
+			// light, so among those the order does not matter.
+			backdrop.draw({
+				projectionMatrix: projection,
+				modelViewMatrix: backdropView,
+				uRes,
+				uHue: hueAt(t),
+			});
+			drawWith(clouds, cloudModel, {
+				uTime: t,
+				uFlow: uCloudFlow,
+				uPurple,
+				uBlue,
+			});
+			drawWith(field, IDENTITY, {
+				uTime: now,
+				uPixelRatio: pixelRatio,
+				uOffset,
+			});
 
 			if (now >= nextLaunchAt) {
 				launch(now);
@@ -413,41 +433,35 @@ export function StarField() {
 			}
 
 			for (let i = streaks.length - 1; i >= 0; i -= 1) {
-				const streak = streaks[i];
-				if (!streak) continue;
-				const life = (now - streak.startedAt) / SHOOTING_LIFETIME_MS;
+				const flight = streaks[i];
+				if (!flight) continue;
+				const life = (now - flight.startedAt) / SHOOTING_LIFETIME_MS;
 				if (life >= 1) {
-					streak.mesh.visible = false;
 					streaks.splice(i, 1);
-					idle.push(streak);
 					continue;
 				}
-				const d = life * streak.travel;
-				streak.mesh.position.set(
-					streak.from.x + d,
-					streak.from.y - d,
-					streak.from.z,
+				const d = life * flight.travel;
+				// Down and to the right.
+				compose(
+					model,
+					flight.fromX + d,
+					flight.fromY - d,
+					flight.fromZ,
+					0,
+					0,
+					-Math.PI / 4,
+					flight.halfHeight * 0.5,
+					flight.halfHeight * 0.012,
+					1,
 				);
-				streak.alpha.value = life < 0.1 ? life * 10 : 1 - life;
+				drawWith(streak, model, {
+					uAlpha: life < 0.1 ? life * 10 : 1 - life,
+				});
 			}
 
-			renderer.render(scene, camera);
 			// The fade-in waits on this rather than on mount, so the sky never
 			// fades up over a canvas that has nothing on it yet.
 			canvas.dataset.drawn = "true";
-		};
-
-		const dispose = () => {
-			geometry.dispose();
-			markMaterial.dispose();
-			cloudGeometry.dispose();
-			cloudMaterial.dispose();
-			streakGeometry.dispose();
-			for (const streak of [...streaks, ...idle])
-				streak.mesh.material.dispose();
-			backdrop.geometry.dispose();
-			backdropMaterial.dispose();
-			renderer.dispose();
 		};
 
 		resize();
@@ -465,7 +479,7 @@ export function StarField() {
 				window.removeEventListener("resize", resize);
 				window.removeEventListener("resize", redraw);
 				window.removeEventListener("pointermove", onPointerMove);
-				dispose();
+				renderer.dispose();
 			};
 		}
 
@@ -485,7 +499,7 @@ export function StarField() {
 			cancelAnimationFrame(frame);
 			window.removeEventListener("resize", resize);
 			window.removeEventListener("pointermove", onPointerMove);
-			dispose();
+			renderer.dispose();
 		};
 	}, [theme]);
 
