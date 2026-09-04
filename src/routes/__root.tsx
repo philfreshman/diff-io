@@ -13,6 +13,8 @@ import { GA_SCRIPT, GA_SRC } from "#/lib/analytics.ts";
 import { createQueryClient } from "#/lib/query/queryClient.ts";
 import { THEME_SCRIPT } from "#/lib/themeScript.ts";
 import { TREE_WIDTH_SCRIPT } from "#/lib/tree/widthScript.ts";
+import { buildDiffBootScript } from "#/lib/worker/bootScript.ts";
+import diffWorkerUrl from "#/lib/worker/diff.worker.ts?worker&url";
 import globalsCss from "#/styles/globals.css?url";
 
 /** The site as it describes itself where a route has nothing more specific. */
@@ -26,6 +28,13 @@ const SITE = "https://diffpack.io";
 
 /** The 512px app icon, which is what the old app put in every card. */
 const SHARE_IMAGE = "/web-app-manifest-512x512.png";
+
+/**
+ * The engine, started from the head. The worker's own URL is the one thing the
+ * script cannot work out for itself, so the bundler's answer is handed to it
+ * here — the same file the client would otherwise have spawned for itself.
+ */
+const DIFF_BOOT_SCRIPT = buildDiffBootScript(diffWorkerUrl);
 
 export const Route = createRootRoute({
 	head: () => ({
@@ -91,6 +100,8 @@ function RootDocument() {
 		<html lang="en" suppressHydrationWarning>
 			<head>
 				<HeadContent />
+				{/* biome-ignore lint/security/noDangerouslySetInnerHtml: the engine is started before hydration, so this must be inline */}
+				<script dangerouslySetInnerHTML={{ __html: DIFF_BOOT_SCRIPT }} />
 				{/* biome-ignore lint/security/noDangerouslySetInnerHtml: pre-paint theme script must be inline */}
 				<script dangerouslySetInnerHTML={{ __html: THEME_SCRIPT }} />
 				{/* biome-ignore lint/security/noDangerouslySetInnerHtml: pre-paint tree width script must be inline */}

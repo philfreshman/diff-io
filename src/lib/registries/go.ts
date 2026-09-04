@@ -8,7 +8,7 @@ const PROXY_URL = "https://proxy.golang.org";
  * version suffix a module path may end with is not one — it has no dotted
  * components — so this tells `github.com/go-chi/chi/v5` apart from `v5.3.1`.
  */
-const MODULE_VERSION = /^v\d+\.\d+\.\d+/;
+export const MODULE_VERSION = /^v\d+\.\d+\.\d+/;
 
 /**
  * The module proxy serves lower-cased paths, escaping every uppercase letter as

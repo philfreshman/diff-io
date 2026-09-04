@@ -118,8 +118,12 @@ pub async fn build_diff_tree_for_package(
     similarity_threshold: f64,
     ignore_whitespace: bool,
 ) -> Result<JsValue, JsValue> {
-    let from_files = get_or_fetch_package(&registry, &pkg, &from).await?;
-    let to_files = get_or_fetch_package(&registry, &pkg, &to).await?;
+    let (from_files, to_files) = futures::join!(
+        get_or_fetch_package(&registry, &pkg, &from),
+        get_or_fetch_package(&registry, &pkg, &to)
+    );
+    let from_files = from_files?;
+    let to_files = to_files?;
     let tree = core::build_diff_tree(from_files, to_files, similarity_threshold, ignore_whitespace);
 
     let from_key = cache_key(&registry, &pkg, &from);
