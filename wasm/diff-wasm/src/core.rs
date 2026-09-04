@@ -16,6 +16,26 @@ pub fn whitespace_mode(ignore_whitespace: bool) -> WhitespaceMode {
     }
 }
 
+/// A diff's `(added, removed, unchanged)` line counts, summed off its op
+/// ranges.
+///
+/// Equivalent to tallying `iter_all_changes()` by tag — `similar` defines that
+/// iterator as `ops().flat_map(iter_changes)`, and an op yields exactly
+/// `old_len` deletions then `new_len` insertions — but without materializing a
+/// `Change` for every line of every `Equal` run just to discard it. An
+/// unchanged run costs one summed length, not one step per line.
+fn count_op_lines(ops: &[DiffOp]) -> (usize, usize, usize) {
+    ops.iter()
+        .fold((0, 0, 0), |(added, removed, unchanged), op| match op {
+            DiffOp::Insert { new_len, .. } => (added + new_len, removed, unchanged),
+            DiffOp::Delete { old_len, .. } => (added, removed + old_len, unchanged),
+            DiffOp::Replace {
+                old_len, new_len, ..
+            } => (added + new_len, removed + old_len, unchanged),
+            DiffOp::Equal { len, .. } => (added, removed, unchanged + len),
+        })
+}
+
 /// Always `diff_lines`, in both modes: `whitespace_mode` reaches no other
 /// constructor, and a file must not change how many lines it has because the
 /// setting was flipped. It is also what `count_diff` has always used, so the
@@ -278,18 +298,7 @@ impl DiffTreeBuilder {
 
         let diff = TextDiff::from_lines(from, to);
 
-        // Count changes using the 'similar' crate
-        let mut added = 0;
-        let mut removed = 0;
-        let mut unchanged = 0;
-
-        for change in diff.iter_all_changes() {
-            match change.tag() {
-                ChangeTag::Insert => added += 1,
-                ChangeTag::Delete => removed += 1,
-                ChangeTag::Equal => unchanged += 1,
-            }
-        }
+        let (added, removed, unchanged) = count_op_lines(diff.ops());
 
         let total = (added + removed + unchanged).max(1);
         unchanged as f64 / total as f64
@@ -563,34 +572,18 @@ impl DiffTreeBuilder {
     }
 
     /// The tree's `+`/`−`, counted the way the file view renders them — or the
-    /// two would contradict each other on the same file.
-    ///
-    /// Walks `ops()` — the diff's `Equal`/`Delete`/`Insert` ranges — instead
-    /// of `iter_all_changes()`, which would materialize a `Change` for every
-    /// line of every `Equal` run just to discard it. Only the ranges that
-    /// changed are ever visited; an unchanged run costs one summed length,
-    /// not one step per line.
+    /// two would contradict each other on the same file. `count_op_lines`
+    /// explains why summing op ranges is the same tally the file view reads.
     fn count_diff(&self, from: &str, to: &str) -> (u32, u32) {
         let diff = TextDiff::configure()
             .whitespace_mode(whitespace_mode(self.ignore_whitespace))
             .diff_lines(from, to);
 
-        let mut added: u32 = 0;
-        let mut removed: u32 = 0;
-
-        for op in diff.ops() {
-            match op {
-                DiffOp::Insert { new_len, .. } => added += *new_len as u32,
-                DiffOp::Delete { old_len, .. } => removed += *old_len as u32,
-                DiffOp::Replace {
-                    old_len, new_len, ..
-                } => {
-                    removed += *old_len as u32;
-                    added += *new_len as u32;
-                }
-                DiffOp::Equal { .. } => {}
-            }
-        }
+        let (added, removed, _) = count_op_lines(diff.ops());
+        // Saturating rather than `as`: a lossy cast would silently wrap a
+        // count that no longer fits the `u32` the tree entry carries.
+        let added = u32::try_from(added).unwrap_or(u32::MAX);
+        let removed = u32::try_from(removed).unwrap_or(u32::MAX);
 
         (added, removed)
     }
@@ -860,96 +853,5 @@ mod tests {
 
         let builder = DiffTreeBuilder::new(0.75, false);
         assert_eq!(builder.count_diff(&from, &to), (1, 1));
-    }
-
-    /// Before/after numbers for issue #152: `cargo test --release
-    /// count_diff_bench -- --ignored --nocapture`. Not run by default —
-    /// this is a timing report, not a correctness check.
-    ///
-    /// `old_count_diff` is the pre-#152 implementation, kept here only so
-    /// this can compare directly against it without touching shipped code.
-    #[test]
-    #[ignore]
-    fn count_diff_bench() {
-        use std::hint::black_box;
-        use std::time::Instant;
-
-        fn old_count_diff(from: &str, to: &str, ignore_whitespace: bool) -> (u32, u32) {
-            let diff = TextDiff::configure()
-                .whitespace_mode(whitespace_mode(ignore_whitespace))
-                .diff_lines(from, to);
-            let mut added = 0;
-            let mut removed = 0;
-            for change in diff.iter_all_changes() {
-                match change.tag() {
-                    ChangeTag::Insert => added += 1,
-                    ChangeTag::Delete => removed += 1,
-                    _ => {}
-                }
-            }
-            (added, removed)
-        }
-
-        fn bench_pair(label: &str, from: &str, to: &str, iterations: u32) {
-            let builder = DiffTreeBuilder::new(0.75, false);
-
-            assert_eq!(
-                old_count_diff(from, to, false),
-                builder.count_diff(from, to),
-                "{label}: old and new counts disagree"
-            );
-
-            let start = Instant::now();
-            for _ in 0..iterations {
-                black_box(old_count_diff(black_box(from), black_box(to), false));
-            }
-            let old_elapsed = start.elapsed();
-
-            let start = Instant::now();
-            for _ in 0..iterations {
-                black_box(builder.count_diff(black_box(from), black_box(to)));
-            }
-            let new_elapsed = start.elapsed();
-
-            println!(
-                "[BENCH] {label}: old {:?}/iter, new {:?}/iter, {:.2}x",
-                old_elapsed / iterations,
-                new_elapsed / iterations,
-                old_elapsed.as_secs_f64() / new_elapsed.as_secs_f64().max(1e-12),
-            );
-        }
-
-        // Shape 1: many files, mostly generated bindings-style content — a
-        // long unchanged run bracketing a small edit. This is the
-        // linux-raw-sys shape the parent issue measured.
-        let bindings_from = numbered_lines(2000);
-        let bindings_to = with_replaced_line(
-            2000,
-            1000,
-            &["a changed binding line", "and an inserted one"],
-        );
-        bench_pair(
-            "bindings-style: 2000 lines, 1 line changed",
-            &bindings_from,
-            &bindings_to,
-            500,
-        );
-
-        // Shape 2: a package with fewer, larger files — a proportionally
-        // large changed block, per the issue's requirement for a second,
-        // differently shaped comparison.
-        let large_from = numbered_lines(20_000);
-        let mut large_to_lines: Vec<String> = (0..20_000).map(|i| format!("line {}", i)).collect();
-        for line in large_to_lines.iter_mut().take(5_500).skip(5_000) {
-            *line = format!("rewritten: {line}");
-        }
-        let mut large_to = large_to_lines.join("\n");
-        large_to.push('\n');
-        bench_pair(
-            "large file: 20000 lines, 500-line block changed",
-            &large_from,
-            &large_to,
-            50,
-        );
     }
 }
