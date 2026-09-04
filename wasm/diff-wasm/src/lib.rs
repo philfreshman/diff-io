@@ -5,7 +5,7 @@ mod package;
 // The native surface `examples/bench.rs` drives: extraction and the tree
 // builder without a fetch in front of them. Nothing here reaches JS — only
 // the `#[wasm_bindgen]` functions below do.
-pub use crate::core::build_diff_tree;
+pub use crate::core::{build_diff_tree, count_diff_lines};
 pub use crate::package::extract_archive_bytes;
 pub use crate::types::{DiffFileEntry, DiffStatus, FileMapEntry, FileType};
 use std::cell::RefCell;

@@ -67,6 +67,22 @@ pub fn get_diff_content(
     result
 }
 
+/// A file's `+`/`−` as the tree reports them. `count_op_lines` explains why
+/// summing op ranges is the same tally the file view reads.
+pub fn count_diff_lines(from: &str, to: &str, ignore_whitespace: bool) -> (u32, u32) {
+    let diff = TextDiff::configure()
+        .whitespace_mode(whitespace_mode(ignore_whitespace))
+        .diff_lines(from, to);
+
+    let (added, removed, _) = count_op_lines(diff.ops());
+    // Saturating rather than `as`: a lossy cast would silently wrap a
+    // count that no longer fits the `u32` the tree entry carries.
+    let added = u32::try_from(added).unwrap_or(u32::MAX);
+    let removed = u32::try_from(removed).unwrap_or(u32::MAX);
+
+    (added, removed)
+}
+
 /// Borrows both packages: they live in the extraction cache for the rest of
 /// the session, and the tree only reads them. Owning them here meant a copy
 /// of every file's content per package per diff — 80 MB each on a large
@@ -606,20 +622,9 @@ impl<'a> DiffTreeBuilder<'a> {
     }
 
     /// The tree's `+`/`−`, counted the way the file view renders them — or the
-    /// two would contradict each other on the same file. `count_op_lines`
-    /// explains why summing op ranges is the same tally the file view reads.
+    /// two would contradict each other on the same file.
     fn count_diff(&self, from: &str, to: &str) -> (u32, u32) {
-        let diff = TextDiff::configure()
-            .whitespace_mode(whitespace_mode(self.ignore_whitespace))
-            .diff_lines(from, to);
-
-        let (added, removed, _) = count_op_lines(diff.ops());
-        // Saturating rather than `as`: a lossy cast would silently wrap a
-        // count that no longer fits the `u32` the tree entry carries.
-        let added = u32::try_from(added).unwrap_or(u32::MAX);
-        let removed = u32::try_from(removed).unwrap_or(u32::MAX);
-
-        (added, removed)
+        count_diff_lines(from, to, self.ignore_whitespace)
     }
 
     fn collect_file_paths(entries: &HashMap<String, FileMapEntry>) -> HashSet<String> {
