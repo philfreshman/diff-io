@@ -38,8 +38,19 @@ export default defineConfig({
 				// module path — on every cold comparison, with only a console warning
 				// to say so. Static hosts vary on whether they get this right, so it
 				// is stated rather than assumed.
+				//
+				// The cache header is repeated here rather than left to the
+				// `/assets/**` rule below: these become Vercel routes, and a route
+				// that matches without a `dest` ends the matching rather than falling
+				// through to the next. Naming the wasm at all therefore takes it out
+				// of the immutable rule — which is how it came to be served
+				// `max-age=0, must-revalidate` and revalidated on every page load,
+				// while every other hashed asset was cached for a year.
 				"/assets/**.wasm": {
-					headers: { "content-type": "application/wasm" },
+					headers: {
+						"content-type": "application/wasm",
+						"cache-control": "public, max-age=31536000, immutable",
+					},
 				},
 				// Everything else is server-rendered HTML: never trusted by the
 				// browser, held briefly at the edge, and served stale while it is

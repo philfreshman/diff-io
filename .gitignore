@@ -49,3 +49,6 @@ fallow-results.json
 
 # Vercel
 .vercel
+
+# Third-party checkouts for local benchmarking (not part of the build)
+vendor/
