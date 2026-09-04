@@ -23,8 +23,17 @@ zip = { version = "8.0", default-features = false, features = ["deflate"] }
 [dev-dependencies]
 wasm-bindgen-test = "0.3"
 
+# Built for speed, not size (#158). `opt-level = 'z'` with `lto = false` was
+# 515 KB and cost every compute phase: on `gdal-src 0.2.1+3.10.3 → 0.3.0+3.12.1`
+# in Chrome, median of 5, `build-tree-total` went 6516 ms → 3471 ms with this
+# profile (extract-both 1324 → 842 ms, diff-compute 5137 → 2509 ms), for a
+# 587 KB module (gzip 199 → 226 KB). `opt-level = 3` measured the same total
+# (3344 ms) for 692 KB, and a `wasm-opt -O3` pass on top of this changed nothing
+# (3514 ms), so neither was taken. `panic = "abort"` drops the unwinding tables
+# nothing in a wasm module can use.
 [profile.release]
-opt-level = 'z'
+opt-level = 's'
 codegen-units = 1
 debug = false
-lto = false
+lto = true
+panic = "abort"
