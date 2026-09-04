@@ -9,6 +9,7 @@ crate-type = ["cdylib", "rlib"]
 [dependencies]
 wasm-bindgen = "0.2"
 wasm-bindgen-futures = "0.4"
+futures = "0.3"
 js-sys = "0.3"
 web-sys = { version = "0.3", features = ["Window", "WorkerGlobalScope", "Response"] }
 serde = { version = "1.0", features = ["derive"] }
@@ -18,6 +19,9 @@ similar = "3.2"
 flate2 = "1.1"
 tar = "0.4"
 zip = { version = "8.0", default-features = false, features = ["deflate"] }
+
+[dev-dependencies]
+wasm-bindgen-test = "0.3"
 
 [profile.release]
 opt-level = 'z'
