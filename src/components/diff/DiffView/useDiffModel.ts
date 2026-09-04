@@ -12,6 +12,7 @@ import {
 } from "#/lib/diff/parseUnifiedDiff.ts";
 import type { FileView } from "#/lib/diff/viewMemory.ts";
 import type { FileDiff } from "#/lib/worker/protocol.ts";
+import { useBenchFirstRows } from "./useBenchFirstRows.ts";
 
 /** Everything the viewer draws, worked out before a single row exists. */
 export interface DiffModel {
@@ -55,6 +56,9 @@ export function useDiffModel(
 	// split pairing both move a change to a different row, so where a
 	// difference *is* has to be recomputed alongside them.
 	const stops = useMemo(() => differenceRows(rows), [rows]);
+
+	// [BENCH] Instrumentation only — see philfreshman/diffpack#148.
+	useBenchFirstRows(rows.length);
 
 	return { lines, language, rows, stops };
 }

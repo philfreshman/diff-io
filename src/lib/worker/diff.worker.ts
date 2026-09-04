@@ -4,15 +4,32 @@ import init, {
 	prefetch_package,
 } from "diff-wasm";
 import wasmUrl from "diff-wasm/diff_wasm_bg.wasm?url";
-import type { WorkerRequest, WorkerResponse } from "./protocol.ts";
+import type {
+	BenchMessage,
+	WorkerRequest,
+	WorkerResponse,
+} from "./protocol.ts";
 
 /** Rename detection threshold, as a content-similarity ratio. */
 const SIMILARITY_THRESHOLD = 0.75;
 
 let wasmReady: Promise<unknown> | null = null;
 
+/** [BENCH] Instrumentation only — see philfreshman/diffpack#148. */
+function bench(phase: string, since: number) {
+	self.postMessage({
+		bench: phase,
+		ms: performance.now() - since,
+	} satisfies BenchMessage);
+}
+
 function ensureWasm() {
-	wasmReady ??= init({ module_or_path: wasmUrl });
+	if (!wasmReady) {
+		const started = performance.now();
+		wasmReady = init({ module_or_path: wasmUrl });
+		// [BENCH] Instrumentation only — see philfreshman/diffpack#148.
+		wasmReady.then(() => bench("wasm-init", started));
+	}
 	return wasmReady;
 }
 

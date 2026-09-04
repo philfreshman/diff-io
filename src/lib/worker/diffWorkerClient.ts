@@ -1,10 +1,12 @@
-import type {
-	DiffFileEntry,
-	DiffRequest,
-	FileDiff,
-	WorkerRequest,
-	WorkerRequestInput,
-	WorkerResponse,
+import {
+	type BenchMessage,
+	type DiffFileEntry,
+	type DiffRequest,
+	type FileDiff,
+	isBenchMessage,
+	type WorkerRequest,
+	type WorkerRequestInput,
+	type WorkerResponse,
 } from "./protocol.ts";
 
 type Pending = {
@@ -29,8 +31,14 @@ function getWorker(): Worker {
 		type: "module",
 	});
 
-	worker.onmessage = (event: MessageEvent<WorkerResponse>) => {
+	worker.onmessage = (event: MessageEvent<WorkerResponse | BenchMessage>) => {
 		const response = event.data;
+		// [BENCH] Instrumentation only — see philfreshman/diffpack#148: the
+		// worker's console is not the page's, so its phases arrive as messages.
+		if (isBenchMessage(response)) {
+			console.log(`[BENCH] ${response.bench} ${response.ms.toFixed(1)}ms`);
+			return;
+		}
 		const entry = pending.get(response.id);
 		if (!entry) return;
 		pending.delete(response.id);

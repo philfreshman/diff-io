@@ -70,6 +70,11 @@ function archives(request: DiffRequest): DiffRequest {
 	};
 }
 
+/** [BENCH] Instrumentation only — see philfreshman/diffpack#148. */
+function bench(phase: string, ms: number): void {
+	console.log(`[BENCH] ${phase} ${ms.toFixed(1)}ms`);
+}
+
 function message(error: unknown): string {
 	return error instanceof Error ? error.message : String(error);
 }
@@ -106,11 +111,16 @@ export function createDiffSession(client: DiffClient) {
 		ignoreWhitespace = request.ignoreWhitespace;
 		store.setState(() => ({ ...IDLE, key, status: "loading" }));
 
+		// [BENCH] Absolute, so it reads as the gap since page load.
+		const asked = performance.now();
+		bench("page-load-to-build-tree", asked);
+
 		try {
 			const tree = await client.buildTree(
 				archives(request),
 				request.ignoreWhitespace,
 			);
+			bench("build-tree-roundtrip", performance.now() - asked);
 			if (!isCurrent(key)) return;
 			store.setState((state) => ({ ...state, status: "ready", tree }));
 		} catch (error) {
@@ -174,12 +184,15 @@ export function createDiffSession(client: DiffClient) {
 		/** Both must still hold: the comparison, and the file within it. */
 		const stillOpen = () => isCurrent(key) && store.state.file?.path === path;
 
+		const askedAt = performance.now();
+
 		try {
 			const diff = await client.getFile(
 				entry.path,
 				entry.oldPath,
 				ignoreWhitespace,
 			);
+			bench("get-file-roundtrip", performance.now() - askedAt);
 			if (!stillOpen()) return;
 			open({ path, status: "ready", diff, error: null });
 		} catch (error) {
