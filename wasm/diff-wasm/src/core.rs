@@ -69,9 +69,13 @@ pub fn get_diff_content(
     result
 }
 
-pub struct DiffTreeBuilder {
-    from_files: HashMap<String, FileMapEntry>,
-    to_files: HashMap<String, FileMapEntry>,
+/// Borrows both packages: they live in the extraction cache for the rest of
+/// the session, and the tree only reads them. Owning them here meant a copy
+/// of every file's content per package per diff — 80 MB each on a large
+/// crate — in a wasm heap that never gives memory back.
+pub struct DiffTreeBuilder<'a> {
+    from_files: &'a HashMap<String, FileMapEntry>,
+    to_files: &'a HashMap<String, FileMapEntry>,
     from_file_paths: HashSet<String>,
     to_file_paths: HashSet<String>,
     from_dirs: HashSet<String>,
@@ -80,30 +84,23 @@ pub struct DiffTreeBuilder {
     ignore_whitespace: bool,
 }
 
-impl DiffTreeBuilder {
-    pub fn new(similarity_threshold: f64, ignore_whitespace: bool) -> Self {
+impl<'a> DiffTreeBuilder<'a> {
+    pub fn new(
+        from_files: &'a HashMap<String, FileMapEntry>,
+        to_files: &'a HashMap<String, FileMapEntry>,
+        similarity_threshold: f64,
+        ignore_whitespace: bool,
+    ) -> Self {
         Self {
-            from_files: HashMap::new(),
-            to_files: HashMap::new(),
-            from_file_paths: HashSet::new(),
-            to_file_paths: HashSet::new(),
-            from_dirs: HashSet::new(),
-            to_dirs: HashSet::new(),
+            from_files,
+            to_files,
+            from_file_paths: Self::collect_file_paths(from_files),
+            to_file_paths: Self::collect_file_paths(to_files),
+            from_dirs: Self::collect_directories(from_files),
+            to_dirs: Self::collect_directories(to_files),
             similarity_threshold: similarity_threshold.max(0.0).min(1.0),
             ignore_whitespace,
         }
-    }
-
-    pub fn set_from_files(&mut self, files: HashMap<String, FileMapEntry>) {
-        self.from_files = files;
-        self.from_file_paths = self.collect_file_paths(&self.from_files);
-        self.from_dirs = self.collect_directories(&self.from_files);
-    }
-
-    pub fn set_to_files(&mut self, files: HashMap<String, FileMapEntry>) {
-        self.to_files = files;
-        self.to_file_paths = self.collect_file_paths(&self.to_files);
-        self.to_dirs = self.collect_directories(&self.to_files);
     }
 
     pub fn build_tree(&self) -> DiffFileEntry {
@@ -367,7 +364,7 @@ impl DiffTreeBuilder {
         root
     }
 
-    fn collect_directories(&self, entries: &HashMap<String, FileMapEntry>) -> HashSet<String> {
+    fn collect_directories(entries: &HashMap<String, FileMapEntry>) -> HashSet<String> {
         let mut dirs = HashSet::new();
 
         for (path, entry) in entries {
@@ -588,7 +585,7 @@ impl DiffTreeBuilder {
         (added, removed)
     }
 
-    fn collect_file_paths(&self, entries: &HashMap<String, FileMapEntry>) -> HashSet<String> {
+    fn collect_file_paths(entries: &HashMap<String, FileMapEntry>) -> HashSet<String> {
         entries
             .iter()
             .filter_map(|(path, entry)| {
@@ -618,11 +615,11 @@ impl DiffTreeBuilder {
         }
     }
 
-    fn file_content<'a>(
+    fn file_content<'m>(
         &self,
-        entries: &'a HashMap<String, FileMapEntry>,
+        entries: &'m HashMap<String, FileMapEntry>,
         path: &str,
-    ) -> Option<&'a str> {
+    ) -> Option<&'m str> {
         entries.get(path).and_then(|entry| {
             if matches!(entry.file_type, FileType::File) {
                 Some(entry.content.as_str())
@@ -634,15 +631,12 @@ impl DiffTreeBuilder {
 }
 
 pub fn build_diff_tree(
-    from_files: HashMap<String, FileMapEntry>,
-    to_files: HashMap<String, FileMapEntry>,
+    from_files: &HashMap<String, FileMapEntry>,
+    to_files: &HashMap<String, FileMapEntry>,
     similarity_threshold: f64,
     ignore_whitespace: bool,
 ) -> DiffFileEntry {
-    let mut builder = DiffTreeBuilder::new(similarity_threshold, ignore_whitespace);
-    builder.set_from_files(from_files);
-    builder.set_to_files(to_files);
-    builder.build_tree()
+    DiffTreeBuilder::new(from_files, to_files, similarity_threshold, ignore_whitespace).build_tree()
 }
 
 #[cfg(test)]
@@ -663,6 +657,13 @@ mod tests {
 
     fn one_file(content: &str) -> HashMap<String, FileMapEntry> {
         HashMap::from([("a.rs".to_string(), file(content))])
+    }
+
+    /// `count_diff` reads only the whitespace mode, so a builder over no
+    /// files is enough to call it.
+    fn builder(ignore_whitespace: bool) -> DiffTreeBuilder<'static> {
+        let empty: &'static HashMap<String, FileMapEntry> = Box::leak(Box::default());
+        DiffTreeBuilder::new(empty, empty, 0.75, ignore_whitespace)
     }
 
     fn files(entries: &[(&str, &str)]) -> HashMap<String, FileMapEntry> {
@@ -708,8 +709,8 @@ mod tests {
     #[test]
     fn a_renamed_file_is_listed_once_at_its_new_path() {
         let tree = build_diff_tree(
-            files(&[("src/reporter.ts", REPORTER)]),
-            files(&[("src/report.ts", REPORTER_EDITED)]),
+            &files(&[("src/reporter.ts", REPORTER)]),
+            &files(&[("src/report.ts", REPORTER_EDITED)]),
             0.75,
             false,
         );
@@ -724,8 +725,8 @@ mod tests {
     #[test]
     fn a_rename_out_of_a_directory_leaves_no_empty_directory_behind() {
         let tree = build_diff_tree(
-            files(&[("src/legacy/reporter.ts", REPORTER)]),
-            files(&[("src/reporter.ts", REPORTER_EDITED)]),
+            &files(&[("src/legacy/reporter.ts", REPORTER)]),
+            &files(&[("src/reporter.ts", REPORTER_EDITED)]),
             0.75,
             false,
         );
@@ -772,13 +773,13 @@ mod tests {
 
     #[test]
     fn a_reformat_only_file_counts_as_no_change_when_ignoring_whitespace() {
-        assert_eq!(DiffTreeBuilder::new(0.75, true).count_diff(FROM, TO), (0, 0));
-        assert_eq!(DiffTreeBuilder::new(0.75, false).count_diff(FROM, TO), (1, 1));
+        assert_eq!(builder(true).count_diff(FROM, TO), (0, 0));
+        assert_eq!(builder(false).count_diff(FROM, TO), (1, 1));
     }
 
     #[test]
     fn a_reformat_only_file_leaves_the_changed_files() {
-        let tree = build_diff_tree(one_file(FROM), one_file(TO), 0.75, true);
+        let tree = build_diff_tree(&one_file(FROM), &one_file(TO), 0.75, true);
         let entry = &tree.children.as_ref().unwrap()[0];
         assert!(matches!(entry.status, DiffStatus::Unchanged));
         assert_eq!((entry.added, entry.removed), (Some(0), Some(0)));
@@ -786,7 +787,7 @@ mod tests {
 
     #[test]
     fn the_same_file_is_modified_when_whitespace_counts() {
-        let tree = build_diff_tree(one_file(FROM), one_file(TO), 0.75, false);
+        let tree = build_diff_tree(&one_file(FROM), &one_file(TO), 0.75, false);
         let entry = &tree.children.as_ref().unwrap()[0];
         assert!(matches!(entry.status, DiffStatus::Modified));
         assert_eq!((entry.added, entry.removed), (Some(1), Some(1)));
@@ -827,7 +828,7 @@ mod tests {
         let to = with_replaced_line(200, 100, &["changed line", "an inserted line"]);
 
         for ignore_whitespace in [false, true] {
-            let builder = DiffTreeBuilder::new(0.75, ignore_whitespace);
+            let builder = builder(ignore_whitespace);
             let counted = builder.count_diff(&from, &to);
             let content = get_diff_content("a.rs", &from, &to, ignore_whitespace);
             assert_eq!(counted, diff_content_counts(&content));
@@ -837,7 +838,7 @@ mod tests {
     #[test]
     fn count_diff_agrees_with_get_diff_content_for_a_reformat_under_both_modes() {
         for ignore_whitespace in [false, true] {
-            let builder = DiffTreeBuilder::new(0.75, ignore_whitespace);
+            let builder = builder(ignore_whitespace);
             let counted = builder.count_diff(FROM, TO);
             let content = get_diff_content("a.rs", FROM, TO, ignore_whitespace);
             assert_eq!(counted, diff_content_counts(&content));
@@ -851,7 +852,7 @@ mod tests {
         let from = numbered_lines(300);
         let to = with_replaced_line(300, 150, &["a completely different line"]);
 
-        let builder = DiffTreeBuilder::new(0.75, false);
+        let builder = builder(false);
         assert_eq!(builder.count_diff(&from, &to), (1, 1));
     }
 }
