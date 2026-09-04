@@ -5,10 +5,16 @@ bun run lint
 bun run format
 bun run test
 
+# Determine the diff base for the fallow audit below: the point where this
+# branch diverged from its upstream, or "development" if there is no upstream.
 UPSTREAM="$(git rev-parse --abbrev-ref --symbolic-full-name '@{upstream}' 2>/dev/null || true)"
 if [ -n "$UPSTREAM" ]; then
   BASE="$(git merge-base "$UPSTREAM" HEAD 2>/dev/null || echo "$UPSTREAM")"
 else
   BASE="development"
 fi
+
+# Run fallow's static-analysis audit on changes since $BASE (dead code,
+# complexity, duplication, etc.), tagged so its config can identify this
+# as the pre-commit gate.
 bunx fallow audit --base "$BASE" --quiet --gate-marker pre-commit
