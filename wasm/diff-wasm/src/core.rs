@@ -1,6 +1,4 @@
-use std::collections::hash_map::DefaultHasher;
 use std::collections::{HashMap, HashSet};
-use std::hash::{Hash, Hasher};
 use similar::{ChangeTag, DiffOp, TextDiff, WhitespaceMode};
 use crate::types::{DiffFileEntry, DiffStatus, FileMapEntry, FileType};
 
@@ -108,16 +106,23 @@ impl<'a> DiffTreeBuilder<'a> {
         let from_paths: HashSet<_> = self.from_files.keys().cloned().collect();
         let to_paths: HashSet<_> = self.to_files.keys().cloned().collect();
 
-        let deleted: Vec<_> = self
+        // Sorted, because rename detection is greedy in this order: the
+        // first added path to clear the threshold claims a deleted file, and
+        // an equal score goes to the first deleted path. Walking a `HashSet`
+        // here made that choice arbitrary — the same two packages could
+        // build two different trees.
+        let mut deleted: Vec<_> = self
             .from_file_paths
             .difference(&self.to_file_paths)
             .cloned()
             .collect();
-        let added: Vec<_> = self
+        let mut added: Vec<_> = self
             .to_file_paths
             .difference(&self.from_file_paths)
             .cloned()
             .collect();
+        deleted.sort();
+        added.sort();
 
         // 2. Detect renames
         let renames = self.detect_renames_optimized(&deleted, &added);
@@ -135,103 +140,149 @@ impl<'a> DiffTreeBuilder<'a> {
         self.compute_tree_stats(tree, &renames)
     }
 
+    /// Pairs each added file with the deleted file it was most likely moved
+    /// from. Greedy, in the sorted order `build_tree` hands over: exact
+    /// copies pair up first, then the closest surviving candidate above the
+    /// threshold, an equal score going to the first deleted path.
+    ///
+    /// Two indexes stand in for the pairwise scan this used to be. Exact
+    /// copies are found by byte length and a comparison, rather than hashing
+    /// every file in full. For the rest, an inverted index from each line of
+    /// the deleted files to the files it occurs in turns the Jaccard step
+    /// around: instead of intersecting an added file's lines with every
+    /// deleted file's, one lookup per line counts the shared lines with each
+    /// deleted file at once, and files sharing no line are never visited.
+    /// On `date-fns 1.30.1 → 2.0.0`, 703 deleted against 3911 added, that
+    /// pairwise scan was 194 ms of a 208 ms diff.
     fn detect_renames_optimized(
         &self,
         deleted: &[String],
         added: &[String],
     ) -> HashMap<String, String> {
         let mut renames = HashMap::new();
-        let mut used = HashSet::new();
+        if deleted.is_empty() || added.is_empty() {
+            return renames;
+        }
+        let mut used = vec![false; deleted.len()];
 
-        // Phase 1: Exact content matches using hash-based lookup
-        let mut del_by_hash: HashMap<u64, Vec<&String>> = HashMap::new();
-        for del_path in deleted {
-            if let Some(content) = self.file_content(&self.from_files, del_path) {
-                let hash = Self::hash_content(content);
-                del_by_hash
-                    .entry(hash)
-                    .or_insert_with(Vec::new)
-                    .push(del_path);
+        // Phase 1: exact copies. Same length first, then the bytes — a
+        // mismatch stops at the first differing byte, where a hash would
+        // have read every file to the end.
+        let mut del_by_len: HashMap<usize, Vec<usize>> = HashMap::new();
+        for (i, del_path) in deleted.iter().enumerate() {
+            if let Some(content) = self.file_content(self.from_files, del_path) {
+                del_by_len.entry(content.len()).or_default().push(i);
             }
         }
 
         for add_path in added {
-            if let Some(add_content) = self.file_content(&self.to_files, add_path) {
-                let hash = Self::hash_content(add_content);
-
-                if let Some(candidates) = del_by_hash.get(&hash) {
-                    for del_path in candidates {
-                        if used.contains(*del_path) {
-                            continue;
-                        }
-
-                        if let Some(del_content) = self.file_content(&self.from_files, del_path) {
-                            if add_content == del_content {
-                                renames.insert(add_path.clone(), (*del_path).clone());
-                                used.insert((*del_path).clone());
-                                break;
-                            }
-                        }
-                    }
-                }
+            let Some(add_content) = self.file_content(self.to_files, add_path) else {
+                continue;
+            };
+            let Some(bucket) = del_by_len.get(&add_content.len()) else {
+                continue;
+            };
+            let exact = bucket.iter().copied().find(|&i| {
+                !used[i] && self.file_content(self.from_files, &deleted[i]) == Some(add_content)
+            });
+            if let Some(i) = exact {
+                renames.insert(add_path.clone(), deleted[i].clone());
+                used[i] = true;
             }
         }
 
-        // Phase 2: Similar content with multi-stage filtering
-
-        // Pre-compute line sets for Jaccard similarity (fast pre-filter)
-        let mut del_line_sets: HashMap<&String, HashSet<&str>> = HashMap::new();
-        for del_path in deleted {
-            if used.contains(del_path) {
+        // Phase 2: near copies. `heads` maps a line to the start of its
+        // chain in `postings`, each entry the index of a deleted file that
+        // contains the line and the next entry of the chain. A flat chain
+        // rather than a `Vec` per line: one allocation for every posting in
+        // the index instead of one per distinct line.
+        let mut heads: HashMap<&str, u32> = HashMap::new();
+        let mut postings: Vec<(u32, u32)> = Vec::new();
+        const END: u32 = u32::MAX;
+        let mut del_lines = vec![0usize; deleted.len()];
+        let mut del_len = vec![0usize; deleted.len()];
+        for (i, del_path) in deleted.iter().enumerate() {
+            if used[i] {
                 continue;
             }
-            if let Some(content) = self.file_content(&self.from_files, del_path) {
-                del_line_sets.insert(del_path, content.lines().collect());
+            let Some(content) = self.file_content(self.from_files, del_path) else {
+                continue;
+            };
+            let lines: HashSet<&str> = content.lines().collect();
+            del_lines[i] = lines.len();
+            del_len[i] = content.len();
+            for line in lines {
+                let head = heads.entry(line).or_insert(END);
+                postings.push((i as u32, *head));
+                *head = (postings.len() - 1) as u32;
             }
         }
+        // Every deleted file was an exact copy of something: nothing left
+        // to pair the remaining added files with, so no line sets for them.
+        if postings.is_empty() {
+            return renames;
+        }
+
+        let mut shared = vec![0u32; deleted.len()];
+        let mut touched: Vec<usize> = Vec::new();
+        let jaccard_floor = self.similarity_threshold * 0.7;
 
         for add_path in added {
             if renames.contains_key(add_path) {
                 continue;
             }
-
-            let add_content = match self.file_content(&self.to_files, add_path) {
-                Some(c) => c,
-                None => continue,
+            let Some(add_content) = self.file_content(self.to_files, add_path) else {
+                continue;
             };
 
             let add_lines: HashSet<&str> = add_content.lines().collect();
+            for line in &add_lines {
+                let mut next = heads.get(line).copied().unwrap_or(END);
+                while next != END {
+                    let (i, after) = postings[next as usize];
+                    let i = i as usize;
+                    if shared[i] == 0 {
+                        touched.push(i);
+                    }
+                    shared[i] += 1;
+                    next = after;
+                }
+            }
+
             let add_name = add_path.split('/').last().unwrap_or("");
-            let mut best: Option<(String, f64)> = None;
+            let mut best: Option<(usize, f64)> = None;
 
-            for del_path in deleted {
-                if used.contains(del_path) {
+            for &i in &touched {
+                let count = shared[i] as usize;
+                shared[i] = 0;
+                if used[i] {
                     continue;
                 }
 
-                let del_content = match self.file_content(&self.from_files, del_path) {
-                    Some(c) => c,
-                    None => continue,
+                // Filter 1: byte length ratio.
+                if !self.can_be_similar_len(del_len[i], add_content.len()) {
+                    continue;
+                }
+
+                // Filter 2: Jaccard over line sets, the shared count being
+                // exactly what the index lookups just tallied.
+                let union = add_lines.len() + del_lines[i] - count;
+                let jaccard = if union == 0 {
+                    0.0
+                } else {
+                    count as f64 / union as f64
                 };
-
-                // Filter 1: Length ratio check (very fast)
-                if !self.can_be_similar(del_content, add_content) {
+                if jaccard < jaccard_floor {
                     continue;
                 }
 
-                // Filter 2: Jaccard similarity on line sets (fast)
-                let del_lines = del_line_sets.get(del_path).unwrap();
-                let jaccard = self.jaccard_similarity(&add_lines, del_lines);
-
-                // Early reject if Jaccard is too low (threshold * 0.7 as heuristic)
-                if jaccard < self.similarity_threshold * 0.7 {
+                // Filter 3: the diff itself, for the few that get this far.
+                let del_path = &deleted[i];
+                let Some(del_content) = self.file_content(self.from_files, del_path) else {
                     continue;
-                }
-
-                // Filter 3: Expensive diff-based similarity (only for promising candidates)
+                };
                 let similarity = self.calculate_similarity(del_content, add_content);
 
-                // Filename boost
                 let del_name = del_path.split('/').last().unwrap_or("");
                 let adjusted = if add_name == del_name {
                     similarity * 1.2
@@ -239,50 +290,36 @@ impl<'a> DiffTreeBuilder<'a> {
                     similarity
                 };
 
-                if adjusted >= self.similarity_threshold {
-                    if let Some((_, best_sim)) = &best {
-                        if adjusted > *best_sim {
-                            best = Some((del_path.clone(), adjusted));
-                        }
-                    } else {
-                        best = Some((del_path.clone(), adjusted));
+                if adjusted < self.similarity_threshold {
+                    continue;
+                }
+                // `touched` is in lookup order, not path order, so the tie
+                // goes to the lower index by comparison rather than by
+                // arrival.
+                let better = match best {
+                    None => true,
+                    Some((best_i, best_sim)) => {
+                        adjusted > best_sim || (adjusted == best_sim && i < best_i)
                     }
+                };
+                if better {
+                    best = Some((i, adjusted));
                 }
             }
+            touched.clear();
 
-            if let Some((from_path, _)) = best {
-                renames.insert(add_path.clone(), from_path.clone());
-                used.insert(from_path);
+            if let Some((i, _)) = best {
+                renames.insert(add_path.clone(), deleted[i].clone());
+                used[i] = true;
             }
         }
 
         renames
     }
 
-    fn jaccard_similarity(&self, set1: &HashSet<&str>, set2: &HashSet<&str>) -> f64 {
-        if set1.is_empty() && set2.is_empty() {
-            return 1.0;
-        }
-
-        let intersection = set1.intersection(set2).count();
-        let union = set1.len() + set2.len() - intersection;
-
-        if union == 0 {
-            return 0.0;
-        }
-
-        intersection as f64 / union as f64
-    }
-
-    fn can_be_similar(&self, from: &str, to: &str) -> bool {
-        let len_ratio = from.len() as f64 / to.len().max(1) as f64;
+    fn can_be_similar_len(&self, from_len: usize, to_len: usize) -> bool {
+        let len_ratio = from_len as f64 / to_len.max(1) as f64;
         len_ratio >= self.similarity_threshold && len_ratio <= 1.0 / self.similarity_threshold
-    }
-
-    fn hash_content(content: &str) -> u64 {
-        let mut hasher = DefaultHasher::new();
-        content.hash(&mut hasher);
-        hasher.finish()
     }
 
     fn calculate_similarity(&self, from: &str, to: &str) -> f64 {
@@ -732,6 +769,154 @@ mod tests {
         );
 
         assert_eq!(all_paths(&tree), ["/", "src", "src/reporter.ts"]);
+    }
+
+    /// `n` numbered lines with the listed ones rewritten, so two files can
+    /// be a known number of edits apart.
+    fn lines_with_edits(n: usize, edits: &[usize]) -> String {
+        (0..n)
+            .map(|i| {
+                if edits.contains(&i) {
+                    format!("edited {}\n", i)
+                } else {
+                    format!("line {}\n", i)
+                }
+            })
+            .collect()
+    }
+
+    /// `(path, status, oldPath)` for every file, in tree order.
+    fn outcomes(node: &DiffFileEntry) -> Vec<(&str, DiffStatus, Option<&str>)> {
+        listed_files(node)
+            .iter()
+            .map(|e| (e.path.as_str(), e.status.clone(), e.old_path.as_deref()))
+            .collect()
+    }
+
+    // The rename pass is greedy, and these pin which candidate it takes when
+    // more than one could. Restructuring the loop for speed must not move
+    // any of them.
+
+    #[test]
+    fn an_exact_copy_beats_a_near_copy_with_the_same_name() {
+        let tree = build_diff_tree(
+            &files(&[
+                ("a/x.ts", &lines_with_edits(20, &[])),
+                ("b/y.ts", &lines_with_edits(20, &[3])),
+            ]),
+            &files(&[("c/y.ts", &lines_with_edits(20, &[]))]),
+            0.75,
+            false,
+        );
+
+        assert_eq!(
+            outcomes(&tree),
+            [
+                ("b/y.ts", DiffStatus::Removed, None),
+                ("c/y.ts", DiffStatus::Renamed, Some("a/x.ts")),
+            ]
+        );
+    }
+
+    #[test]
+    fn identical_files_pair_up_in_path_order() {
+        let content = lines_with_edits(20, &[]);
+        let tree = build_diff_tree(
+            &files(&[("z/one.ts", &content), ("a/one.ts", &content)]),
+            &files(&[("n/one.ts", &content), ("m/one.ts", &content)]),
+            0.75,
+            false,
+        );
+
+        assert_eq!(
+            outcomes(&tree),
+            [
+                ("m/one.ts", DiffStatus::Renamed, Some("a/one.ts")),
+                ("n/one.ts", DiffStatus::Renamed, Some("z/one.ts")),
+            ]
+        );
+    }
+
+    #[test]
+    fn a_same_named_candidate_wins_over_a_closer_one_with_another_name() {
+        // `old/aaa.ts` is one edit away and sorts first; `old/report.ts` is
+        // two edits away but shares the name, and the name is worth more.
+        let tree = build_diff_tree(
+            &files(&[
+                ("old/aaa.ts", &lines_with_edits(20, &[3])),
+                ("old/report.ts", &lines_with_edits(20, &[3, 7])),
+            ]),
+            &files(&[("new/report.ts", &lines_with_edits(20, &[]))]),
+            0.75,
+            false,
+        );
+
+        assert_eq!(
+            outcomes(&tree),
+            [
+                ("new/report.ts", DiffStatus::Renamed, Some("old/report.ts")),
+                ("old/aaa.ts", DiffStatus::Removed, None),
+            ]
+        );
+    }
+
+    #[test]
+    fn an_equal_score_goes_to_the_first_deleted_path() {
+        let near = lines_with_edits(20, &[3]);
+        let tree = build_diff_tree(
+            &files(&[("b/x.ts", &near), ("a/x.ts", &near)]),
+            &files(&[("n/x.ts", &lines_with_edits(20, &[]))]),
+            0.75,
+            false,
+        );
+
+        assert_eq!(
+            outcomes(&tree),
+            [
+                ("b/x.ts", DiffStatus::Removed, None),
+                ("n/x.ts", DiffStatus::Renamed, Some("a/x.ts")),
+            ]
+        );
+    }
+
+    #[test]
+    fn the_first_added_path_claims_a_deleted_file_both_could_match() {
+        let tree = build_diff_tree(
+            &files(&[("old/x.ts", &lines_with_edits(20, &[]))]),
+            &files(&[
+                ("new/b.ts", &lines_with_edits(20, &[3])),
+                ("new/a.ts", &lines_with_edits(20, &[7])),
+            ]),
+            0.75,
+            false,
+        );
+
+        assert_eq!(
+            outcomes(&tree),
+            [
+                ("new/a.ts", DiffStatus::Renamed, Some("old/x.ts")),
+                ("new/b.ts", DiffStatus::Added, None),
+            ]
+        );
+    }
+
+    #[test]
+    fn files_of_equal_length_sharing_no_line_are_not_a_rename() {
+        let other: String = (0..20).map(|i| format!("othr {}\n", i)).collect();
+        let tree = build_diff_tree(
+            &files(&[("a.ts", &lines_with_edits(20, &[]))]),
+            &files(&[("b.ts", &other)]),
+            0.75,
+            false,
+        );
+
+        assert_eq!(
+            outcomes(&tree),
+            [
+                ("a.ts", DiffStatus::Removed, None),
+                ("b.ts", DiffStatus::Added, None),
+            ]
+        );
     }
 
     #[test]
