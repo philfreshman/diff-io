@@ -108,16 +108,23 @@ impl<'a> DiffTreeBuilder<'a> {
         let from_paths: HashSet<_> = self.from_files.keys().cloned().collect();
         let to_paths: HashSet<_> = self.to_files.keys().cloned().collect();
 
-        let deleted: Vec<_> = self
+        // Sorted, because rename detection is greedy in this order: the
+        // first added path to clear the threshold claims a deleted file, and
+        // an equal score goes to the first deleted path. Walking a `HashSet`
+        // here made that choice arbitrary — the same two packages could
+        // build two different trees.
+        let mut deleted: Vec<_> = self
             .from_file_paths
             .difference(&self.to_file_paths)
             .cloned()
             .collect();
-        let added: Vec<_> = self
+        let mut added: Vec<_> = self
             .to_file_paths
             .difference(&self.from_file_paths)
             .cloned()
             .collect();
+        deleted.sort();
+        added.sort();
 
         // 2. Detect renames
         let renames = self.detect_renames_optimized(&deleted, &added);
@@ -732,6 +739,154 @@ mod tests {
         );
 
         assert_eq!(all_paths(&tree), ["/", "src", "src/reporter.ts"]);
+    }
+
+    /// `n` numbered lines with the listed ones rewritten, so two files can
+    /// be a known number of edits apart.
+    fn lines_with_edits(n: usize, edits: &[usize]) -> String {
+        (0..n)
+            .map(|i| {
+                if edits.contains(&i) {
+                    format!("edited {}\n", i)
+                } else {
+                    format!("line {}\n", i)
+                }
+            })
+            .collect()
+    }
+
+    /// `(path, status, oldPath)` for every file, in tree order.
+    fn outcomes(node: &DiffFileEntry) -> Vec<(&str, DiffStatus, Option<&str>)> {
+        listed_files(node)
+            .iter()
+            .map(|e| (e.path.as_str(), e.status.clone(), e.old_path.as_deref()))
+            .collect()
+    }
+
+    // The rename pass is greedy, and these pin which candidate it takes when
+    // more than one could. Restructuring the loop for speed must not move
+    // any of them.
+
+    #[test]
+    fn an_exact_copy_beats_a_near_copy_with_the_same_name() {
+        let tree = build_diff_tree(
+            &files(&[
+                ("a/x.ts", &lines_with_edits(20, &[])),
+                ("b/y.ts", &lines_with_edits(20, &[3])),
+            ]),
+            &files(&[("c/y.ts", &lines_with_edits(20, &[]))]),
+            0.75,
+            false,
+        );
+
+        assert_eq!(
+            outcomes(&tree),
+            [
+                ("b/y.ts", DiffStatus::Removed, None),
+                ("c/y.ts", DiffStatus::Renamed, Some("a/x.ts")),
+            ]
+        );
+    }
+
+    #[test]
+    fn identical_files_pair_up_in_path_order() {
+        let content = lines_with_edits(20, &[]);
+        let tree = build_diff_tree(
+            &files(&[("z/one.ts", &content), ("a/one.ts", &content)]),
+            &files(&[("n/one.ts", &content), ("m/one.ts", &content)]),
+            0.75,
+            false,
+        );
+
+        assert_eq!(
+            outcomes(&tree),
+            [
+                ("m/one.ts", DiffStatus::Renamed, Some("a/one.ts")),
+                ("n/one.ts", DiffStatus::Renamed, Some("z/one.ts")),
+            ]
+        );
+    }
+
+    #[test]
+    fn a_same_named_candidate_wins_over_a_closer_one_with_another_name() {
+        // `old/aaa.ts` is one edit away and sorts first; `old/report.ts` is
+        // two edits away but shares the name, and the name is worth more.
+        let tree = build_diff_tree(
+            &files(&[
+                ("old/aaa.ts", &lines_with_edits(20, &[3])),
+                ("old/report.ts", &lines_with_edits(20, &[3, 7])),
+            ]),
+            &files(&[("new/report.ts", &lines_with_edits(20, &[]))]),
+            0.75,
+            false,
+        );
+
+        assert_eq!(
+            outcomes(&tree),
+            [
+                ("new/report.ts", DiffStatus::Renamed, Some("old/report.ts")),
+                ("old/aaa.ts", DiffStatus::Removed, None),
+            ]
+        );
+    }
+
+    #[test]
+    fn an_equal_score_goes_to_the_first_deleted_path() {
+        let near = lines_with_edits(20, &[3]);
+        let tree = build_diff_tree(
+            &files(&[("b/x.ts", &near), ("a/x.ts", &near)]),
+            &files(&[("n/x.ts", &lines_with_edits(20, &[]))]),
+            0.75,
+            false,
+        );
+
+        assert_eq!(
+            outcomes(&tree),
+            [
+                ("b/x.ts", DiffStatus::Removed, None),
+                ("n/x.ts", DiffStatus::Renamed, Some("a/x.ts")),
+            ]
+        );
+    }
+
+    #[test]
+    fn the_first_added_path_claims_a_deleted_file_both_could_match() {
+        let tree = build_diff_tree(
+            &files(&[("old/x.ts", &lines_with_edits(20, &[]))]),
+            &files(&[
+                ("new/b.ts", &lines_with_edits(20, &[3])),
+                ("new/a.ts", &lines_with_edits(20, &[7])),
+            ]),
+            0.75,
+            false,
+        );
+
+        assert_eq!(
+            outcomes(&tree),
+            [
+                ("new/a.ts", DiffStatus::Renamed, Some("old/x.ts")),
+                ("new/b.ts", DiffStatus::Added, None),
+            ]
+        );
+    }
+
+    #[test]
+    fn files_of_equal_length_sharing_no_line_are_not_a_rename() {
+        let other: String = (0..20).map(|i| format!("othr {}\n", i)).collect();
+        let tree = build_diff_tree(
+            &files(&[("a.ts", &lines_with_edits(20, &[]))]),
+            &files(&[("b.ts", &other)]),
+            0.75,
+            false,
+        );
+
+        assert_eq!(
+            outcomes(&tree),
+            [
+                ("a.ts", DiffStatus::Removed, None),
+                ("b.ts", DiffStatus::Added, None),
+            ]
+        );
     }
 
     #[test]
