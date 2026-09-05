@@ -31,14 +31,16 @@ pub async fn fetch_and_extract_package(
 ) -> Result<HashMap<String, FileMapEntry>, JsValue> {
     if registry == "go" {
         let bytes = fetch_bytes(&build_go_zip_url(pkg, version)).await?;
-        let files = extract_archive_bytes_with(&bytes, false).map_err(|err| JsValue::from_str(&err))?;
+        let files =
+            extract_archive_bytes_with(&bytes, false).map_err(|err| JsValue::from_str(&err))?;
         return Ok(strip_go_module_root(files, pkg, version));
     }
 
     let bytes = match registry {
         "pypi" => fetch_pypi_sdist_bytes(pkg, version).await?,
         _ => {
-            let url = build_tarball_url(registry, pkg, version)?;
+            let url =
+                build_tarball_url(registry, pkg, version).map_err(|err| JsValue::from_str(&err))?;
             fetch_bytes(&url).await?
         }
     };
@@ -97,7 +99,7 @@ fn strip_go_module_root(
     stripped
 }
 
-fn build_tarball_url(registry: &str, pkg: &str, version: &str) -> Result<String, JsValue> {
+fn build_tarball_url(registry: &str, pkg: &str, version: &str) -> Result<String, String> {
     match registry {
         "npm" => {
             let unscoped = pkg.split('/').nth(1).unwrap_or(pkg);
@@ -108,9 +110,7 @@ fn build_tarball_url(registry: &str, pkg: &str, version: &str) -> Result<String,
         "crates" => Ok(format!(
             "https://static.crates.io/crates/{pkg}/{pkg}-{version}.crate"
         )),
-        _ => Err(JsValue::from_str(&format!(
-            "Unsupported registry: {registry}"
-        ))),
+        _ => Err(format!("Unsupported registry: {registry}")),
     }
 }
 
@@ -145,15 +145,14 @@ fn fetch_with_str(url: &str) -> Result<js_sys::Promise, JsValue> {
 async fn fetch_pypi_sdist_bytes(pkg: &str, version: &str) -> Result<Vec<u8>, JsValue> {
     let metadata_url = format!("https://pypi.org/pypi/{pkg}/{version}/json");
     let metadata_bytes = fetch_bytes(&metadata_url).await?;
-    let metadata: PyPiResponse = serde_json::from_slice(&metadata_bytes).map_err(|err| {
-        JsValue::from_str(&format!("Failed to parse PyPI metadata: {err}"))
-    })?;
+    let metadata: PyPiResponse = serde_json::from_slice(&metadata_bytes)
+        .map_err(|err| JsValue::from_str(&format!("Failed to parse PyPI metadata: {err}")))?;
 
-    let sdist_url = select_pypi_sdist_url(&metadata.urls)?;
+    let sdist_url = select_pypi_sdist_url(&metadata.urls).map_err(|err| JsValue::from_str(&err))?;
     fetch_bytes(&sdist_url).await
 }
 
-fn select_pypi_sdist_url(urls: &[PyPiUrl]) -> Result<String, JsValue> {
+fn select_pypi_sdist_url(urls: &[PyPiUrl]) -> Result<String, String> {
     let mut sdist_supported = None;
     let mut sdist_fallback = None;
     let mut wheel_supported = None;
@@ -183,7 +182,7 @@ fn select_pypi_sdist_url(urls: &[PyPiUrl]) -> Result<String, JsValue> {
         .or(wheel_supported)
         .or(sdist_fallback)
         .or(wheel_fallback)
-        .ok_or_else(|| JsValue::from_str("No downloadable artifacts found for PyPI package"))
+        .ok_or_else(|| "No downloadable artifacts found for PyPI package".to_string())
 }
 
 fn is_supported_archive_url(url: &str) -> bool {
@@ -346,8 +345,9 @@ fn parse_zip_bytes(
     let mut files = HashMap::new();
 
     for i in 0..archive.len() {
-        let mut entry =
-            archive.by_index(i).map_err(|err| format!("Zip entry error: {err}"))?;
+        let mut entry = archive
+            .by_index(i)
+            .map_err(|err| format!("Zip entry error: {err}"))?;
         let normalized = normalize_path(entry.name(), entry.is_dir());
         if normalized.is_empty() {
             continue;
@@ -524,7 +524,11 @@ mod tests {
         let mut out = Vec::with_capacity(bytes + 64);
         let mut line = 0;
         while out.len() < bytes {
-            let _ = writeln!(out, "let value_{line} = compute({seed}, {});", line * 7 % 13);
+            let _ = writeln!(
+                out,
+                "let value_{line} = compute({seed}, {});",
+                line * 7 % 13
+            );
             line += 1;
         }
         out.truncate(bytes);
@@ -604,11 +608,20 @@ mod tests {
     fn mixed_entries() -> Vec<(String, Vec<u8>)> {
         vec![
             ("pkg-1.0.0/src/lib.rs".to_string(), text(1, 3000)),
-            ("pkg-1.0.0/README.md".to_string(), "# héllo wörld ✓\n".as_bytes().to_vec()),
-            ("pkg-1.0.0/data.bin".to_string(), vec![0x66, 0x6f, 0xff, 0xfe, 0x6f, 0x80, 0x0a]),
+            (
+                "pkg-1.0.0/README.md".to_string(),
+                "# héllo wörld ✓\n".as_bytes().to_vec(),
+            ),
+            (
+                "pkg-1.0.0/data.bin".to_string(),
+                vec![0x66, 0x6f, 0xff, 0xfe, 0x6f, 0x80, 0x0a],
+            ),
             ("pkg-1.0.0/empty".to_string(), Vec::new()),
             ("pkg-1.0.0/src/exact_block.rs".to_string(), text(2, 512)),
-            ("pkg-1.0.0/src/truncated_utf8.rs".to_string(), "abc€".as_bytes()[..5].to_vec()),
+            (
+                "pkg-1.0.0/src/truncated_utf8.rs".to_string(),
+                "abc€".as_bytes()[..5].to_vec(),
+            ),
         ]
     }
 
@@ -664,7 +677,10 @@ mod tests {
     fn assert_within_copy_budget(archive: &[u8], entries: &[(String, Vec<u8>)], shape: &str) {
         let (files, requested) = bytes_requested_during(|| extract_archive_bytes(archive).unwrap());
         let content = content_bytes(entries);
-        assert!(files.len() > entries.len(), "directories are in the map too");
+        assert!(
+            files.len() > entries.len(),
+            "directories are in the map too"
+        );
         assert!(
             requested < COPIES_ALLOWED * content,
             "{shape}: extracting {content} bytes of content requested {requested} bytes \
@@ -689,5 +705,420 @@ mod tests {
     fn extracting_a_zip_copies_each_byte_of_content_about_once() {
         let entries = package(48, 96 * 1024);
         assert_within_copy_budget(&zip_bytes(&entries), &entries, "zip");
+    }
+
+    // ---- URL construction -------------------------------------------------
+
+    #[test]
+    fn a_go_module_path_escapes_every_uppercase_letter() {
+        assert_eq!(
+            escape_go_module_path("github.com/Masterminds/semver"),
+            "github.com/!masterminds/semver"
+        );
+        assert_eq!(
+            escape_go_module_path("github.com/sirupsen/logrus"),
+            "github.com/sirupsen/logrus"
+        );
+        assert_eq!(escape_go_module_path("ABC"), "!a!b!c");
+        assert_eq!(escape_go_module_path(""), "");
+    }
+
+    /// Non-ASCII uppercase is left alone: the proxy's escaping rule is defined
+    /// over ASCII, and lower-casing anything else would invent a path.
+    #[test]
+    fn go_module_escaping_leaves_non_ascii_alone() {
+        assert_eq!(
+            escape_go_module_path("gopkg.in/Ünicode"),
+            "gopkg.in/Ünicode"
+        );
+    }
+
+    #[test]
+    fn a_go_zip_url_carries_the_escaped_path_and_the_version() {
+        assert_eq!(
+            build_go_zip_url("github.com/Masterminds/semver", "v3.2.1"),
+            "https://proxy.golang.org/github.com/!masterminds/semver/@v/v3.2.1.zip"
+        );
+    }
+
+    #[test]
+    fn an_npm_tarball_url_uses_the_unscoped_name_for_the_file() {
+        assert_eq!(
+            build_tarball_url("npm", "left-pad", "1.3.0").unwrap(),
+            "https://registry.npmjs.org/left-pad/-/left-pad-1.3.0.tgz"
+        );
+        assert_eq!(
+            build_tarball_url("npm", "@types/node", "20.1.0").unwrap(),
+            "https://registry.npmjs.org/@types/node/-/node-20.1.0.tgz"
+        );
+    }
+
+    #[test]
+    fn a_crates_tarball_url_repeats_the_name_in_the_file() {
+        assert_eq!(
+            build_tarball_url("crates", "serde", "1.0.200").unwrap(),
+            "https://static.crates.io/crates/serde/serde-1.0.200.crate"
+        );
+    }
+
+    #[test]
+    fn an_unknown_registry_has_no_tarball_url() {
+        assert_eq!(
+            build_tarball_url("maven", "guava", "33.0.0").unwrap_err(),
+            "Unsupported registry: maven"
+        );
+    }
+
+    // ---- PyPI artifact selection ------------------------------------------
+
+    fn pypi(packagetype: &str, url: &str) -> PyPiUrl {
+        PyPiUrl {
+            url: url.to_string(),
+            packagetype: packagetype.to_string(),
+        }
+    }
+
+    #[test]
+    fn every_shape_the_extractor_understands_is_a_supported_archive_url() {
+        for url in [
+            "https://x/a.tar.gz",
+            "https://x/a.TGZ",
+            "https://x/a.tar",
+            "https://x/a.zip",
+            "https://x/a.whl",
+        ] {
+            assert!(is_supported_archive_url(url), "{url}");
+        }
+        for url in [
+            "https://x/a.tar.bz2",
+            "https://x/a.exe",
+            "https://x/a.egg",
+            "https://x/a",
+        ] {
+            assert!(!is_supported_archive_url(url), "{url}");
+        }
+    }
+
+    #[test]
+    fn a_supported_sdist_outranks_everything_else() {
+        let urls = [
+            pypi("bdist_wheel", "https://x/a.whl"),
+            pypi("sdist", "https://x/a.tar.bz2"),
+            pypi("sdist", "https://x/a.tar.gz"),
+        ];
+        assert_eq!(select_pypi_sdist_url(&urls).unwrap(), "https://x/a.tar.gz");
+    }
+
+    #[test]
+    fn a_supported_wheel_beats_an_sdist_the_extractor_cannot_open() {
+        let urls = [
+            pypi("sdist", "https://x/a.tar.bz2"),
+            pypi("bdist_wheel", "https://x/a.whl"),
+        ];
+        assert_eq!(select_pypi_sdist_url(&urls).unwrap(), "https://x/a.whl");
+    }
+
+    /// Nothing supported on offer: the sdist is still the better guess, and
+    /// the extractor gets to be the one that says no.
+    #[test]
+    fn an_unsupported_sdist_is_the_fallback_before_an_unsupported_wheel() {
+        let urls = [
+            pypi("bdist_wheel", "https://x/a.egg"),
+            pypi("sdist", "https://x/a.tar.bz2"),
+        ];
+        assert_eq!(select_pypi_sdist_url(&urls).unwrap(), "https://x/a.tar.bz2");
+    }
+
+    #[test]
+    fn the_first_candidate_of_a_rank_wins() {
+        let urls = [
+            pypi("sdist", "https://x/first.tar.gz"),
+            pypi("sdist", "https://x/second.tar.gz"),
+        ];
+        assert_eq!(
+            select_pypi_sdist_url(&urls).unwrap(),
+            "https://x/first.tar.gz"
+        );
+    }
+
+    #[test]
+    fn a_release_with_no_usable_artifact_is_an_error() {
+        assert_eq!(
+            select_pypi_sdist_url(&[]).unwrap_err(),
+            "No downloadable artifacts found for PyPI package"
+        );
+        // `bdist_egg` is neither of the two packagetypes considered.
+        assert!(select_pypi_sdist_url(&[pypi("bdist_egg", "https://x/a.zip")]).is_err());
+    }
+
+    // ---- format sniffing --------------------------------------------------
+
+    #[test]
+    fn gzip_is_recognised_by_its_two_magic_bytes() {
+        assert!(is_gzip(&[0x1f, 0x8b, 0x08, 0x00]));
+        assert!(!is_gzip(&[0x1f]));
+        assert!(!is_gzip(&[]));
+        assert!(!is_gzip(&[0x1f, 0x8c]));
+    }
+
+    /// All three local-header signatures, because a zip that was streamed or
+    /// spanned carries one of the other two.
+    #[test]
+    fn zip_is_recognised_by_any_of_its_signatures() {
+        assert!(is_zip(b"PK\x03\x04"));
+        assert!(is_zip(b"PK\x05\x06"));
+        assert!(is_zip(b"PK\x07\x08"));
+        assert!(!is_zip(b"PK\x01\x02"));
+        assert!(!is_zip(b"PK\x03"));
+        assert!(!is_zip(&[]));
+    }
+
+    #[test]
+    fn the_gzip_trailer_is_read_as_the_uncompressed_length() {
+        let payload = text(0, 5000);
+        assert_eq!(gzip_uncompressed_size(&gzip(&payload)), payload.len());
+        // Too short to hold a trailer at all.
+        assert_eq!(gzip_uncompressed_size(&[0x1f, 0x8b, 0x08]), 0);
+    }
+
+    // ---- buffers and content ----------------------------------------------
+
+    #[test]
+    fn an_entry_buffer_is_sized_from_its_header_but_capped_by_the_archive() {
+        assert_eq!(entry_buffer(1024, 4096).capacity(), 1024);
+        assert_eq!(entry_buffer(u64::MAX, 4096).capacity(), 4096);
+        assert_eq!(entry_buffer(0, 4096).capacity(), 0);
+    }
+
+    #[test]
+    fn utf8_content_is_taken_as_is_and_invalid_bytes_are_rendered_lossily() {
+        assert_eq!(content_from_bytes("héllo".as_bytes().to_vec()), "héllo");
+        assert_eq!(content_from_bytes(vec![0x66, 0xff, 0x6f]), "f\u{FFFD}o");
+        assert_eq!(content_from_bytes(Vec::new()), "");
+    }
+
+    #[test]
+    fn a_file_entry_keeps_its_content_and_a_directory_entry_has_none() {
+        let file = file_entry("body".to_string());
+        assert!(matches!(file.file_type, FileType::File));
+        assert_eq!(file.content, "body");
+
+        let dir = directory_entry();
+        assert!(matches!(dir.file_type, FileType::Directory));
+        assert_eq!(dir.content, "");
+    }
+
+    // ---- path normalisation -----------------------------------------------
+
+    #[test]
+    fn a_path_is_normalised_to_forward_slashes_without_a_leading_dot_or_root() {
+        assert_eq!(normalize_path("src\\lib.rs", false), "src/lib.rs");
+        assert_eq!(normalize_path("./src/lib.rs", false), "src/lib.rs");
+        assert_eq!(normalize_path("././src/lib.rs", false), "src/lib.rs");
+        assert_eq!(normalize_path("/src/lib.rs", false), "src/lib.rs");
+    }
+
+    /// A directory entry arrives with a trailing slash; the map keys it
+    /// without one, so it is the same string a child's parent walk produces.
+    #[test]
+    fn a_directory_loses_its_trailing_slash_and_a_file_keeps_its_name() {
+        assert_eq!(normalize_path("src/", true), "src");
+        assert_eq!(normalize_path("src///", true), "src");
+        assert_eq!(normalize_path("weird/name/", false), "weird/name/");
+    }
+
+    #[test]
+    fn a_path_that_names_nothing_normalises_to_the_empty_string() {
+        assert_eq!(normalize_path("", false), "");
+        assert_eq!(normalize_path(".", false), "");
+        assert_eq!(normalize_path("./", true), "");
+        assert_eq!(normalize_path("/", true), "");
+    }
+
+    // ---- directory synthesis and root stripping ---------------------------
+
+    fn map(entries: &[(&str, FileMapEntry)]) -> HashMap<String, FileMapEntry> {
+        entries
+            .iter()
+            .map(|(path, entry)| (path.to_string(), entry.clone()))
+            .collect()
+    }
+
+    fn sorted_keys(files: &HashMap<String, FileMapEntry>) -> Vec<String> {
+        let mut keys: Vec<String> = files.keys().cloned().collect();
+        keys.sort();
+        keys
+    }
+
+    #[test]
+    fn every_ancestor_of_a_file_becomes_a_directory_entry() {
+        let mut files = map(&[("a/b/c/file.rs", file_entry("x".to_string()))]);
+        ensure_directories(&mut files);
+        assert_eq!(sorted_keys(&files), ["a", "a/b", "a/b/c", "a/b/c/file.rs"]);
+        for dir in ["a", "a/b", "a/b/c"] {
+            assert!(matches!(files[dir].file_type, FileType::Directory));
+        }
+    }
+
+    /// The synthesised walk must not overwrite an entry that is already there.
+    #[test]
+    fn ensuring_directories_leaves_existing_entries_alone() {
+        let mut files = map(&[
+            ("a", directory_entry()),
+            ("a/file.rs", file_entry("body".to_string())),
+        ]);
+        ensure_directories(&mut files);
+        assert_eq!(files["a/file.rs"].content, "body");
+        assert!(matches!(files["a/file.rs"].file_type, FileType::File));
+        assert_eq!(files.len(), 2);
+    }
+
+    #[test]
+    fn a_single_top_level_directory_is_stripped() {
+        let files = map(&[
+            ("pkg-1.0.0", directory_entry()),
+            ("pkg-1.0.0/src", directory_entry()),
+            ("pkg-1.0.0/src/lib.rs", file_entry("x".to_string())),
+        ]);
+        assert_eq!(
+            sorted_keys(&strip_common_root(files)),
+            ["src", "src/lib.rs"]
+        );
+    }
+
+    #[test]
+    fn two_top_level_entries_keep_their_root() {
+        let files = map(&[
+            ("a", directory_entry()),
+            ("a/lib.rs", file_entry("x".to_string())),
+            ("b", directory_entry()),
+        ]);
+        assert_eq!(
+            sorted_keys(&strip_common_root(files)),
+            ["a", "a/lib.rs", "b"]
+        );
+    }
+
+    /// A lone top-level *file* is not a wrapper directory — stripping it would
+    /// leave nothing behind.
+    #[test]
+    fn a_lone_top_level_file_is_not_stripped() {
+        let files = map(&[("README.md", file_entry("x".to_string()))]);
+        assert_eq!(sorted_keys(&strip_common_root(files)), ["README.md"]);
+    }
+
+    #[test]
+    fn a_root_with_nothing_under_it_is_kept() {
+        let files = map(&[("pkg-1.0.0", directory_entry())]);
+        assert_eq!(sorted_keys(&strip_common_root(files)), ["pkg-1.0.0"]);
+    }
+
+    #[test]
+    fn an_empty_map_survives_root_stripping() {
+        assert!(strip_common_root(HashMap::new()).is_empty());
+    }
+
+    // ---- the Go module prefix ---------------------------------------------
+
+    #[test]
+    fn a_go_module_root_is_stripped_prefix_and_all() {
+        let files = map(&[
+            ("github.com/x/y@v1.2.3", directory_entry()),
+            (
+                "github.com/x/y@v1.2.3/go.mod",
+                file_entry("module x".to_string()),
+            ),
+            (
+                "github.com/x/y@v1.2.3/internal/z.go",
+                file_entry("package z".to_string()),
+            ),
+        ]);
+        let stripped = strip_go_module_root(files, "github.com/x/y", "v1.2.3");
+        assert_eq!(
+            sorted_keys(&stripped),
+            ["go.mod", "internal", "internal/z.go"]
+        );
+        assert!(matches!(
+            stripped["internal"].file_type,
+            FileType::Directory
+        ));
+    }
+
+    /// No entry carries the `<module>@<version>/` prefix — a zip laid out some
+    /// other way falls back to the ordinary single-root strip.
+    #[test]
+    fn a_zip_without_the_module_prefix_falls_back_to_the_common_root() {
+        let files = map(&[
+            ("pkg", directory_entry()),
+            ("pkg/main.go", file_entry("package main".to_string())),
+        ]);
+        let stripped = strip_go_module_root(files, "github.com/x/y", "v1.2.3");
+        assert_eq!(sorted_keys(&stripped), ["main.go"]);
+    }
+
+    // ---- extraction round-trips -------------------------------------------
+
+    /// What the Go path asks for: the module prefix is stripped afterwards, so
+    /// extraction must not have taken the first component off already.
+    #[test]
+    fn extraction_can_be_asked_to_keep_the_top_level_directory() {
+        let entries = vec![("pkg-1.0.0/src/lib.rs".to_string(), text(1, 128))];
+        let files = extract_archive_bytes_with(&tar_bytes(&entries), false).unwrap();
+        assert_eq!(
+            sorted_keys(&files),
+            ["pkg-1.0.0", "pkg-1.0.0/src", "pkg-1.0.0/src/lib.rs"]
+        );
+    }
+
+    #[test]
+    fn a_tar_directory_entry_becomes_a_directory_in_the_map() {
+        let mut builder = tar::Builder::new(Vec::new());
+        let mut header = tar::Header::new_gnu();
+        header.set_size(0);
+        header.set_entry_type(tar::EntryType::Directory);
+        header.set_mode(0o755);
+        header.set_cksum();
+        builder
+            .append_data(&mut header, "pkg-1.0.0/docs/", &[][..])
+            .unwrap();
+
+        let mut file_header = tar::Header::new_gnu();
+        file_header.set_size(2);
+        file_header.set_mode(0o644);
+        file_header.set_cksum();
+        builder
+            .append_data(&mut file_header, "pkg-1.0.0/a.rs", &b"hi"[..])
+            .unwrap();
+
+        let files = extract_archive_bytes(&builder.into_inner().unwrap()).unwrap();
+        assert!(matches!(files["docs"].file_type, FileType::Directory));
+        assert_eq!(files["a.rs"].content, "hi");
+    }
+
+    #[test]
+    fn a_zip_directory_entry_becomes_a_directory_in_the_map() {
+        let mut writer = zip::ZipWriter::new(Cursor::new(Vec::new()));
+        let options = zip::write::SimpleFileOptions::default();
+        writer.add_directory("pkg-1.0.0/docs/", options).unwrap();
+        writer.start_file("pkg-1.0.0/a.rs", options).unwrap();
+        writer.write_all(b"hi").unwrap();
+        let archive = writer.finish().unwrap().into_inner();
+
+        let files = extract_archive_bytes(&archive).unwrap();
+        assert!(matches!(files["docs"].file_type, FileType::Directory));
+        assert_eq!(files["a.rs"].content, "hi");
+    }
+
+    #[test]
+    fn bytes_that_are_neither_gzip_nor_zip_nor_tar_are_an_error() {
+        assert!(extract_archive_bytes(b"not an archive at all").is_err());
+    }
+
+    #[test]
+    fn a_corrupt_zip_central_directory_is_an_error() {
+        let mut archive = zip_bytes(&mixed_entries());
+        let len = archive.len();
+        archive.truncate(len - 8);
+        assert!(extract_archive_bytes(&archive).is_err());
     }
 }

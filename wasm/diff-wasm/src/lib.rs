@@ -1,6 +1,6 @@
-mod types;
 mod core;
 mod package;
+mod types;
 
 // The native surface `examples/bench.rs` drives: extraction and the tree
 // builder without a fetch in front of them. Nothing here reaches JS — only
@@ -8,11 +8,11 @@ mod package;
 pub use crate::core::build_diff_tree;
 pub use crate::package::extract_archive_bytes;
 pub use crate::types::{DiffFileEntry, DiffStatus, FileMapEntry, FileType};
+use serde::Serialize;
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;
 use wasm_bindgen::prelude::*;
-use serde::Serialize;
 
 /// One extracted package, shared between the cache and whoever is reading it.
 /// The cache keeps a package for the session, and a diff only reads it, so a
@@ -53,7 +53,6 @@ async fn get_or_fetch_package(
     });
     Ok(files)
 }
-
 
 fn file_content<'a>(files: &'a HashMap<String, FileMapEntry>, path: &str) -> Option<&'a str> {
     files.get(path).and_then(|entry| match entry.file_type {
@@ -145,7 +144,12 @@ pub async fn build_diff_tree_for_package(
     );
     let from_files = from_files?;
     let to_files = to_files?;
-    let tree = core::build_diff_tree(&from_files, &to_files, similarity_threshold, ignore_whitespace);
+    let tree = core::build_diff_tree(
+        &from_files,
+        &to_files,
+        similarity_threshold,
+        ignore_whitespace,
+    );
 
     let from_key = cache_key(&registry, &pkg, &from);
     let to_key = cache_key(&registry, &pkg, &to);
@@ -185,4 +189,135 @@ pub fn get_diff_for_path(
 
     let result = build_diff_result(&filename, from_content, to_content, ignore_whitespace);
     Ok(serde_wasm_bindgen::to_value(&result)?)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The `#[wasm_bindgen]` entry points above are exercised by
+    /// `tests/web.rs` under `wasm-pack test`: they need a `fetch` and a
+    /// `JsValue`, neither of which exists on the host, where constructing a
+    /// `JsValue` aborts the process. What is tested here is everything they
+    /// are built out of.
+    fn file(content: &str) -> FileMapEntry {
+        FileMapEntry {
+            file_type: FileType::File,
+            content: content.to_string(),
+        }
+    }
+
+    fn dir() -> FileMapEntry {
+        FileMapEntry {
+            file_type: FileType::Directory,
+            content: String::new(),
+        }
+    }
+
+    /// The cache is keyed per registry, package and version: two registries
+    /// serving a package of the same name must not share an entry.
+    #[test]
+    fn a_cache_key_separates_registry_package_and_version() {
+        assert_eq!(cache_key("npm", "left-pad", "1.3.0"), "npm:left-pad:1.3.0");
+        assert_ne!(
+            cache_key("npm", "requests", "2.0.0"),
+            cache_key("pypi", "requests", "2.0.0")
+        );
+        assert_ne!(
+            cache_key("crates", "serde", "1.0.0"),
+            cache_key("crates", "serde", "1.0.1")
+        );
+    }
+
+    /// Scoped npm names contain a slash, which must not be read as a
+    /// separator when the key is compared.
+    #[test]
+    fn a_scoped_package_name_keys_on_its_whole_name() {
+        assert_eq!(
+            cache_key("npm", "@types/node", "20.1.0"),
+            "npm:@types/node:20.1.0"
+        );
+    }
+
+    #[test]
+    fn only_a_file_has_content() {
+        let files = HashMap::from([
+            ("a.rs".to_string(), file("body")),
+            ("src".to_string(), dir()),
+        ]);
+        assert_eq!(file_content(&files, "a.rs"), Some("body"));
+        assert_eq!(file_content(&files, "src"), None);
+        assert_eq!(file_content(&files, "missing.rs"), None);
+    }
+
+    /// The path is in neither version — a stale link, or a file that only
+    /// ever existed as a rename's source. The viewer gets a sentence, not a
+    /// diff, so it does not try to render one.
+    #[test]
+    fn a_file_in_neither_version_is_not_a_diff() {
+        let result = build_diff_result("gone.rs", None, None, false);
+        assert!(!result.is_diff);
+        assert_eq!(result.data, "File not present in either version.");
+    }
+
+    #[test]
+    fn an_added_file_is_rendered_against_dev_null() {
+        let result = build_diff_result("a.rs", None, Some("one\ntwo"), false);
+        assert!(result.is_diff);
+        assert_eq!(result.data, "--- /dev/null\n+++ to/a.rs\n+ one\n+ two");
+    }
+
+    #[test]
+    fn a_removed_file_is_rendered_against_dev_null() {
+        let result = build_diff_result("a.rs", Some("one\ntwo"), None, false);
+        assert!(result.is_diff);
+        assert_eq!(result.data, "--- from/a.rs\n+++ /dev/null\n- one\n- two");
+    }
+
+    /// Byte-identical: the file itself, marked as not a diff, so the viewer
+    /// renders it as a file rather than as a hunk of all-context lines.
+    #[test]
+    fn an_unchanged_file_is_returned_as_its_own_content() {
+        let result = build_diff_result("a.rs", Some("same\n"), Some("same\n"), false);
+        assert!(!result.is_diff);
+        assert_eq!(result.data, "same\n");
+    }
+
+    #[test]
+    fn a_changed_file_is_rendered_as_a_diff() {
+        let result = build_diff_result("a.rs", Some("one\n"), Some("two\n"), false);
+        assert!(result.is_diff);
+        assert_eq!(result.data, "--- from/a.rs\n+++ to/a.rs\n- one\n+ two");
+    }
+
+    /// Whitespace-only changes still reach the diff renderer — the file is
+    /// not byte-identical — but in `ignore_whitespace` mode every line comes
+    /// back as context.
+    #[test]
+    fn a_reformat_is_all_context_when_whitespace_is_ignored() {
+        let from = "fn main() {\n\tlet x=1;\n}\n";
+        let to = "fn main() {\n    let x = 1;\n}\n";
+
+        let ignoring = build_diff_result("a.rs", Some(from), Some(to), true);
+        assert!(ignoring.is_diff);
+        assert!(
+            !ignoring
+                .data
+                .lines()
+                .any(|line| line.starts_with('-') && !line.starts_with("---")),
+            "no line should read as removed: {}",
+            ignoring.data
+        );
+
+        let exact = build_diff_result("a.rs", Some(from), Some(to), false);
+        assert!(exact.data.contains("- \tlet x=1;"));
+    }
+
+    /// A one-line file has no trailing newline to split on; the renderer must
+    /// still produce a header and exactly one line.
+    #[test]
+    fn a_file_without_a_trailing_newline_renders_one_line() {
+        let result = build_diff_result("a.rs", None, Some("only"), false);
+        assert_eq!(result.data, "--- /dev/null\n+++ to/a.rs\n+ only");
+    }
 }

@@ -1,6 +1,6 @@
-use std::collections::{HashMap, HashSet};
-use similar::{ChangeTag, TextDiff, WhitespaceMode};
 use crate::types::{DiffFileEntry, DiffStatus, FileMapEntry, FileType};
+use similar::{ChangeTag, TextDiff, WhitespaceMode};
+use std::collections::{HashMap, HashSet};
 
 /// `Exact` is Git's default; `IgnoreAll` is its `-w` — every space, tab and
 /// line-ending character disregarded. There is no third choice on offer,
@@ -636,7 +636,11 @@ impl<'a> DiffTreeBuilder<'a> {
         from_dirs: &HashSet<String>,
         to_dirs: &HashSet<String>,
     ) -> FileType {
-        if let Some(entry) = self.from_files.get(path).or_else(|| self.to_files.get(path)) {
+        if let Some(entry) = self
+            .from_files
+            .get(path)
+            .or_else(|| self.to_files.get(path))
+        {
             return entry.file_type.clone();
         }
 
@@ -668,7 +672,13 @@ pub fn build_diff_tree(
     similarity_threshold: f64,
     ignore_whitespace: bool,
 ) -> DiffFileEntry {
-    DiffTreeBuilder::new(from_files, to_files, similarity_threshold, ignore_whitespace).build_tree()
+    DiffTreeBuilder::new(
+        from_files,
+        to_files,
+        similarity_threshold,
+        ignore_whitespace,
+    )
+    .build_tree()
 }
 
 #[cfg(test)]
@@ -971,5 +981,472 @@ mod tests {
         let entry = &tree.children.as_ref().unwrap()[0];
         assert!(matches!(entry.status, DiffStatus::Modified));
         assert_eq!((entry.added, entry.removed), (Some(1), Some(1)));
+    }
+
+    // ---- helpers ----------------------------------------------------------
+
+    fn dir() -> FileMapEntry {
+        FileMapEntry {
+            file_type: FileType::Directory,
+            content: String::new(),
+        }
+    }
+
+    /// The tree node at `path`, directories included.
+    fn node_at<'t>(root: &'t DiffFileEntry, path: &str) -> &'t DiffFileEntry {
+        fn walk<'t>(node: &'t DiffFileEntry, path: &str) -> Option<&'t DiffFileEntry> {
+            if node.path == path {
+                return Some(node);
+            }
+            node.children
+                .iter()
+                .flatten()
+                .find_map(|child| walk(child, path))
+        }
+        walk(root, path).unwrap_or_else(|| panic!("{path} is not in {:?}", all_paths(root)))
+    }
+
+    fn tree(from: &[(&str, &str)], to: &[(&str, &str)]) -> DiffFileEntry {
+        build_diff_tree(&files(from), &files(to), 0.75, false)
+    }
+
+    // ---- whitespace mode --------------------------------------------------
+
+    #[test]
+    fn ignoring_whitespace_is_the_only_thing_that_reaches_ignore_all() {
+        assert!(matches!(whitespace_mode(true), WhitespaceMode::IgnoreAll));
+        assert!(matches!(whitespace_mode(false), WhitespaceMode::Exact));
+    }
+
+    // ---- get_diff_content -------------------------------------------------
+
+    #[test]
+    fn a_diff_opens_with_the_two_file_headers() {
+        let diff = get_diff_content("src/a.rs", "one\n", "two\n", false);
+        assert!(diff.starts_with("--- from/src/a.rs\n+++ to/src/a.rs\n"));
+    }
+
+    #[test]
+    fn every_line_carries_its_sign_and_a_space() {
+        assert_eq!(
+            get_diff_content("a.rs", "keep\ndrop\n", "keep\nadd\n", false),
+            "--- from/a.rs\n+++ to/a.rs\n  keep\n- drop\n+ add"
+        );
+    }
+
+    #[test]
+    fn two_identical_contents_diff_to_headers_and_context_only() {
+        assert_eq!(
+            get_diff_content("a.rs", "same\n", "same\n", false),
+            "--- from/a.rs\n+++ to/a.rs\n  same"
+        );
+    }
+
+    // ---- the similarity threshold -----------------------------------------
+
+    /// The threshold is a ratio, and every filter built on it assumes that.
+    /// A caller handing over 2.0 or -1 must not be able to disable them.
+    #[test]
+    fn a_threshold_outside_zero_to_one_is_clamped() {
+        let empty: HashMap<String, FileMapEntry> = HashMap::new();
+        assert_eq!(
+            DiffTreeBuilder::new(&empty, &empty, 2.0, false).similarity_threshold,
+            1.0
+        );
+        assert_eq!(
+            DiffTreeBuilder::new(&empty, &empty, -1.0, false).similarity_threshold,
+            0.0
+        );
+        assert_eq!(
+            DiffTreeBuilder::new(&empty, &empty, 0.6, false).similarity_threshold,
+            0.6
+        );
+    }
+
+    // ---- can_be_similar_len -----------------------------------------------
+
+    /// The cheap first filter: a file cannot be a 0.75-similar copy of one
+    /// four times its length, whatever its lines say.
+    #[test]
+    fn the_length_filter_is_symmetric_around_the_threshold() {
+        let b = builder(false); // threshold 0.75
+        assert!(b.can_be_similar_len(100, 100));
+        assert!(b.can_be_similar_len(75, 100));
+        assert!(b.can_be_similar_len(100, 75));
+        assert!(!b.can_be_similar_len(74, 100));
+        assert!(!b.can_be_similar_len(100, 74));
+    }
+
+    /// An empty candidate would be a division by zero; the length of 1 it is
+    /// given instead makes anything non-trivial fail the filter.
+    #[test]
+    fn a_zero_length_candidate_does_not_divide_by_zero() {
+        let b = builder(false);
+        assert!(!b.can_be_similar_len(100, 0));
+        assert!(b.can_be_similar_len(1, 0));
+    }
+
+    // ---- calculate_similarity ---------------------------------------------
+
+    #[test]
+    fn identical_content_is_perfectly_similar_and_an_empty_side_is_not_similar_at_all() {
+        let b = builder(false);
+        assert_eq!(b.calculate_similarity("a\nb\n", "a\nb\n"), 1.0);
+        assert_eq!(b.calculate_similarity("", "a\n"), 0.0);
+        assert_eq!(b.calculate_similarity("a\n", ""), 0.0);
+        // Both empty is the equality case, checked before the emptiness one.
+        assert_eq!(b.calculate_similarity("", ""), 1.0);
+    }
+
+    /// Three lines kept, one replaced: four unchanged of six changes counted.
+    #[test]
+    fn similarity_is_the_share_of_lines_the_diff_left_alone() {
+        let b = builder(false);
+        let from = "a\nb\nc\nd\n";
+        let to = "a\nb\nc\nD\n";
+        let similarity = b.calculate_similarity(from, to);
+        assert!((similarity - 3.0 / 5.0).abs() < 1e-9, "got {similarity}");
+    }
+
+    #[test]
+    fn files_sharing_nothing_are_not_similar() {
+        let b = builder(false);
+        assert_eq!(b.calculate_similarity("a\nb\n", "y\nz\n"), 0.0);
+    }
+
+    // ---- count_diff -------------------------------------------------------
+
+    #[test]
+    fn counting_a_diff_returns_inserted_and_deleted_lines() {
+        assert_eq!(
+            builder(false).count_diff("a\nb\nc\n", "a\nB\nc\nd\n"),
+            (2, 1)
+        );
+        assert_eq!(builder(false).count_diff("a\n", "a\n"), (0, 0));
+        assert_eq!(builder(false).count_diff("", "a\nb\n"), (2, 0));
+        assert_eq!(builder(false).count_diff("a\nb\n", ""), (0, 2));
+    }
+
+    #[test]
+    fn counting_a_reformat_depends_on_the_whitespace_mode() {
+        assert_eq!(builder(false).count_diff(FROM, TO), (1, 1));
+        assert_eq!(builder(true).count_diff(FROM, TO), (0, 0));
+    }
+
+    // ---- path and entry bookkeeping ---------------------------------------
+
+    #[test]
+    fn only_files_are_collected_as_file_paths() {
+        let entries = HashMap::from([
+            ("src".to_string(), dir()),
+            ("src/a.rs".to_string(), file("x")),
+            ("README.md".to_string(), file("y")),
+        ]);
+        let mut paths: Vec<String> = DiffTreeBuilder::collect_file_paths(&entries)
+            .into_iter()
+            .collect();
+        paths.sort();
+        assert_eq!(paths, ["README.md", "src/a.rs"]);
+    }
+
+    /// Explicit directory entries and every ancestor implied by a file path,
+    /// so a package that ships no directory entries still builds a tree.
+    #[test]
+    fn directories_come_from_entries_and_from_the_ancestors_of_files() {
+        let entries = HashMap::from([
+            ("docs".to_string(), dir()),
+            ("a/b/c/file.rs".to_string(), file("x")),
+            ("top.rs".to_string(), file("y")),
+        ]);
+        let mut dirs: Vec<String> = DiffTreeBuilder::collect_directories(&entries)
+            .into_iter()
+            .collect();
+        dirs.sort();
+        assert_eq!(dirs, ["a", "a/b", "a/b/c", "docs"]);
+    }
+
+    #[test]
+    fn a_paths_parent_is_everything_before_its_last_slash() {
+        assert_eq!(DiffTreeBuilder::parent_path("a/b/c.rs"), "a/b");
+        assert_eq!(DiffTreeBuilder::parent_path("a/b"), "a");
+        assert_eq!(DiffTreeBuilder::parent_path("top.rs"), "/");
+        assert_eq!(DiffTreeBuilder::parent_path("/top.rs"), "/");
+        assert_eq!(DiffTreeBuilder::parent_path(""), "/");
+    }
+
+    /// A path present on either side takes that side's type; one known only
+    /// as an ancestor is a directory.
+    #[test]
+    fn a_paths_type_comes_from_whichever_side_has_it() {
+        let from = HashMap::from([("a.rs".to_string(), file("x"))]);
+        let to = HashMap::from([("docs".to_string(), dir()), ("b.rs".to_string(), file("y"))]);
+        let b = DiffTreeBuilder::new(&from, &to, 0.75, false);
+        let no_dirs = HashSet::new();
+
+        assert!(matches!(
+            b.resolve_file_type("a.rs", &no_dirs, &no_dirs),
+            FileType::File
+        ));
+        assert!(matches!(
+            b.resolve_file_type("b.rs", &no_dirs, &no_dirs),
+            FileType::File
+        ));
+        assert!(matches!(
+            b.resolve_file_type("docs", &no_dirs, &no_dirs),
+            FileType::Directory
+        ));
+        assert!(matches!(
+            b.resolve_file_type("src", &no_dirs, &no_dirs),
+            FileType::Directory
+        ));
+    }
+
+    /// A directory has no content to diff, so it must not answer with the
+    /// empty string a file's content would be compared against.
+    #[test]
+    fn only_a_file_has_content() {
+        let entries = HashMap::from([
+            ("src".to_string(), dir()),
+            ("src/a.rs".to_string(), file("body")),
+        ]);
+        let b = builder(false);
+        assert_eq!(b.file_content(&entries, "src/a.rs"), Some("body"));
+        assert_eq!(b.file_content(&entries, "src"), None);
+        assert_eq!(b.file_content(&entries, "missing.rs"), None);
+    }
+
+    // ---- tree structure ---------------------------------------------------
+
+    #[test]
+    fn the_tree_is_rooted_at_a_slash_and_children_are_sorted() {
+        let tree = tree(
+            &[("b.rs", "x\n"), ("a.rs", "x\n"), ("src/z.rs", "x\n")],
+            &[],
+        );
+        assert_eq!(tree.path, "/");
+        assert!(matches!(tree.file_type, FileType::Directory));
+        let top: Vec<&str> = tree
+            .children
+            .iter()
+            .flatten()
+            .map(|child| child.path.as_str())
+            .collect();
+        assert_eq!(top, ["a.rs", "b.rs", "src"]);
+    }
+
+    #[test]
+    fn a_nested_file_hangs_off_its_own_directory_chain() {
+        let tree = tree(&[], &[("a/b/c.rs", "x\n")]);
+        assert_eq!(all_paths(&tree), ["/", "a", "a/b", "a/b/c.rs"]);
+    }
+
+    #[test]
+    fn a_directory_with_nothing_under_it_is_not_in_the_tree() {
+        let from = HashMap::from([
+            ("empty".to_string(), dir()),
+            ("a.rs".to_string(), file("x\n")),
+        ]);
+        let to = HashMap::from([("a.rs".to_string(), file("x\n"))]);
+        let tree = build_diff_tree(&from, &to, 0.75, false);
+        assert_eq!(all_paths(&tree), ["/", "a.rs"]);
+    }
+
+    /// Both packages are empty: a root with no children, not a panic.
+    #[test]
+    fn two_empty_packages_build_an_empty_tree() {
+        let tree = tree(&[], &[]);
+        assert_eq!(all_paths(&tree), ["/"]);
+        assert_eq!(tree.status, DiffStatus::Unchanged);
+        assert_eq!(tree.added, Some(0));
+        assert_eq!(tree.removed, Some(0));
+    }
+
+    // ---- statuses and counts ----------------------------------------------
+
+    #[test]
+    fn an_added_file_counts_every_line_as_added() {
+        let tree = tree(&[], &[("a.rs", "one\ntwo\nthree\n")]);
+        let node = node_at(&tree, "a.rs");
+        assert_eq!(node.status, DiffStatus::Added);
+        assert_eq!((node.added, node.removed), (Some(3), Some(0)));
+        assert_eq!(node.old_path, None);
+    }
+
+    #[test]
+    fn a_removed_file_counts_every_line_as_removed() {
+        let tree = tree(&[("a.rs", "one\ntwo\n")], &[]);
+        let node = node_at(&tree, "a.rs");
+        assert_eq!(node.status, DiffStatus::Removed);
+        assert_eq!((node.added, node.removed), (Some(0), Some(2)));
+    }
+
+    #[test]
+    fn a_byte_identical_file_is_unchanged_and_costs_no_diff() {
+        let tree = tree(&[("a.rs", "one\ntwo\n")], &[("a.rs", "one\ntwo\n")]);
+        let node = node_at(&tree, "a.rs");
+        assert_eq!(node.status, DiffStatus::Unchanged);
+        assert_eq!((node.added, node.removed), (Some(0), Some(0)));
+    }
+
+    #[test]
+    fn an_edited_file_is_modified_and_carries_its_counts() {
+        let tree = tree(&[("a.rs", "one\ntwo\n")], &[("a.rs", "one\nTWO\nthree\n")]);
+        let node = node_at(&tree, "a.rs");
+        assert_eq!(node.status, DiffStatus::Modified);
+        assert_eq!((node.added, node.removed), (Some(2), Some(1)));
+    }
+
+    /// A directory sums what is under it, however deep.
+    #[test]
+    fn a_directory_sums_the_counts_of_everything_beneath_it() {
+        let tree = tree(
+            &[("src/a.rs", "one\n")],
+            &[("src/a.rs", "ONE\n"), ("src/deep/b.rs", "x\ny\n")],
+        );
+        let src = node_at(&tree, "src");
+        assert_eq!(src.status, DiffStatus::Modified);
+        assert_eq!((src.added, src.removed), (Some(3), Some(1)));
+        assert_eq!(tree.added, Some(3));
+        assert_eq!(tree.removed, Some(1));
+    }
+
+    #[test]
+    fn a_directory_only_the_new_version_has_is_added() {
+        let tree = tree(&[("a.rs", "x\n")], &[("a.rs", "x\n"), ("docs/b.md", "y\n")]);
+        assert_eq!(node_at(&tree, "docs").status, DiffStatus::Added);
+    }
+
+    #[test]
+    fn a_directory_only_the_old_version_had_is_removed() {
+        let tree = tree(&[("a.rs", "x\n"), ("docs/b.md", "y\n")], &[("a.rs", "x\n")]);
+        assert_eq!(node_at(&tree, "docs").status, DiffStatus::Removed);
+    }
+
+    #[test]
+    fn a_directory_whose_children_are_all_unchanged_is_unchanged() {
+        let tree = tree(&[("src/a.rs", "x\n")], &[("src/a.rs", "x\n")]);
+        assert_eq!(node_at(&tree, "src").status, DiffStatus::Unchanged);
+        assert_eq!(tree.status, DiffStatus::Unchanged);
+    }
+
+    /// The root is in both versions by definition, so it is never added or
+    /// removed — only unchanged or modified.
+    #[test]
+    fn the_root_is_modified_when_anything_under_it_changed() {
+        assert_eq!(tree(&[], &[("a.rs", "x\n")]).status, DiffStatus::Modified);
+        assert_eq!(tree(&[("a.rs", "x\n")], &[]).status, DiffStatus::Modified);
+    }
+
+    // ---- rename detection -------------------------------------------------
+
+    /// Nothing was added or nothing was deleted: no pair can exist, and the
+    /// detector must say so before building any index.
+    #[test]
+    fn a_one_sided_change_produces_no_renames() {
+        let b = builder(false);
+        assert!(b
+            .detect_renames_optimized(&[], &["a.rs".to_string()])
+            .is_empty());
+        assert!(b
+            .detect_renames_optimized(&["a.rs".to_string()], &[])
+            .is_empty());
+    }
+
+    #[test]
+    fn a_file_moved_without_an_edit_is_a_rename() {
+        let tree = tree(&[("src/a.rs", REPORTER)], &[("lib/a.rs", REPORTER)]);
+        let node = node_at(&tree, "lib/a.rs");
+        assert_eq!(node.status, DiffStatus::Renamed);
+        assert_eq!(node.old_path.as_deref(), Some("src/a.rs"));
+        assert_eq!((node.added, node.removed), (Some(0), Some(0)));
+    }
+
+    #[test]
+    fn a_renamed_file_carries_the_counts_of_the_edit_that_came_with_it() {
+        let tree = tree(&[("src/a.rs", REPORTER)], &[("src/b.rs", REPORTER_EDITED)]);
+        let node = node_at(&tree, "src/b.rs");
+        assert_eq!(node.status, DiffStatus::Renamed);
+        assert_eq!(node.old_path.as_deref(), Some("src/a.rs"));
+        assert_eq!((node.added, node.removed), (Some(1), Some(1)));
+    }
+
+    /// Two files sharing no line at all: an add and a delete, not a rename.
+    #[test]
+    fn two_unrelated_files_are_an_add_and_a_delete() {
+        let tree = tree(&[("a.rs", "alpha\nbeta\n")], &[("b.rs", "gamma\ndelta\n")]);
+        assert_eq!(node_at(&tree, "a.rs").status, DiffStatus::Removed);
+        assert_eq!(node_at(&tree, "b.rs").status, DiffStatus::Added);
+    }
+
+    /// A threshold of 0 pairs anything the length filter lets through, and a
+    /// threshold of 1 pairs only exact copies — the two ends of the knob.
+    #[test]
+    fn the_threshold_decides_how_far_a_rename_may_stretch() {
+        let from = files(&[("a.rs", REPORTER)]);
+        let to = files(&[("b.rs", REPORTER_EDITED)]);
+
+        let strict = build_diff_tree(&from, &to, 1.0, false);
+        assert_eq!(node_at(&strict, "b.rs").status, DiffStatus::Added);
+
+        let loose = build_diff_tree(&from, &to, 0.0, false);
+        assert_eq!(node_at(&loose, "b.rs").status, DiffStatus::Renamed);
+    }
+
+    /// A deleted file claimed by an exact copy is not available to a near one.
+    #[test]
+    fn a_deleted_file_is_claimed_at_most_once() {
+        let tree = tree(
+            &[("a.rs", REPORTER)],
+            &[("copy.rs", REPORTER), ("edited.rs", REPORTER_EDITED)],
+        );
+        assert_eq!(node_at(&tree, "copy.rs").status, DiffStatus::Renamed);
+        assert_eq!(node_at(&tree, "copy.rs").old_path.as_deref(), Some("a.rs"));
+        assert_eq!(node_at(&tree, "edited.rs").status, DiffStatus::Added);
+    }
+
+    /// Directories are not renamed as such: a moved file appears at its new
+    /// path and its old directory is gone.
+    #[test]
+    fn moving_a_file_between_directories_moves_the_node() {
+        let tree = tree(&[("old/a.rs", REPORTER)], &[("new/a.rs", REPORTER)]);
+        assert_eq!(all_paths(&tree), ["/", "new", "new/a.rs"]);
+        assert_eq!(node_at(&tree, "new").status, DiffStatus::Added);
+    }
+
+    // ---- the free function ------------------------------------------------
+
+    /// `build_diff_tree` is what `lib.rs` and `examples/bench.rs` call; it
+    /// must be the builder and nothing else.
+    #[test]
+    fn the_free_function_is_the_builder() {
+        let from = files(&[("a.rs", "one\n"), ("src/b.rs", REPORTER)]);
+        let to = files(&[("a.rs", "two\n"), ("src/c.rs", REPORTER)]);
+        let direct = DiffTreeBuilder::new(&from, &to, 0.75, false).build_tree();
+        let via_free = build_diff_tree(&from, &to, 0.75, false);
+        assert_eq!(outcomes(&direct), outcomes(&via_free));
+        assert_eq!(all_paths(&direct), all_paths(&via_free));
+    }
+
+    /// Rename detection walks sorted paths so the same two packages always
+    /// build the same tree; run it enough times to catch a `HashSet` order
+    /// leaking back in.
+    #[test]
+    fn the_same_two_packages_build_the_same_tree_every_time() {
+        let from = files(&[
+            ("src/a.rs", REPORTER),
+            ("src/b.rs", REPORTER),
+            ("src/c.rs", REPORTER_EDITED),
+        ]);
+        let to = files(&[
+            ("lib/x.rs", REPORTER),
+            ("lib/y.rs", REPORTER),
+            ("lib/z.rs", REPORTER_EDITED),
+        ]);
+        let baseline = build_diff_tree(&from, &to, 0.75, false);
+        let first = outcomes(&baseline);
+        for _ in 0..20 {
+            let again = build_diff_tree(&from, &to, 0.75, false);
+            assert_eq!(outcomes(&again), first);
+        }
     }
 }
