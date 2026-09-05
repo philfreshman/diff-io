@@ -95,10 +95,20 @@ BASE_URL=http://localhost:4321 bunx playwright test    # running, and skip the r
 ```
 
 The Rust engine has its own tests, which no `bun` script runs — they compile for the host, not for
-`wasm32`, and are the fastest way to pin what a diff renders:
+`wasm32`, and are the fastest way to pin what a diff renders. They cover everything the engine does
+without a browser in front of it: archive extraction and path normalisation, the registry URL
+builders, rename detection, the tree's statuses and counts, and the serialised shape TypeScript
+reads. What they cannot reach is the handful of functions that *are* the JS boundary — `fetch`,
+and the `#[wasm_bindgen]` entry points — because constructing a `JsValue` off `wasm32` aborts the
+process. Those are what `tests/web.rs` is for, under `wasm-pack test`.
+
+The engine is formatted by `rustfmt`, checked in CI. There is no pre-commit hook for it, so run it
+yourself before pushing:
 
 ```bash
-cd wasm/diff-wasm && cargo test
+cd wasm/diff-wasm
+cargo test
+cargo fmt --all          # `--all --check` to see what it would change, which is what CI runs
 ```
 
 ### The pre-commit hook
@@ -129,17 +139,19 @@ Code commits are gated separately (`.claude/hooks/fallow-gate.sh`, installed via
 ### CI
 
 `.github/workflows/ci.yml` runs on every pull request to `development` and on every push to it, in
-four jobs:
+five jobs:
 
 | Job | Runs | Needs |
 | :--- | :--- | :--- |
 | `typecheck, lint, unit tests` | `typecheck`, `lint`, `format`, `test`, `check:badge` | bun only |
-| `end-to-end` | `cargo test`, `build:wasm`, `check:wasm-types`, `test:e2e` | bun + Rust + Chromium |
+| `rustfmt, engine tests` | `cargo fmt --all --check`, `cargo test` | Rust only |
+| `end-to-end` | `build:wasm`, `check:wasm-types`, `test:e2e` | bun + Rust + Chromium |
 | `fallow audit (PR gate)` | `fallow audit --gate new-only`, `fallow security --gate newly-reachable`, SARIF upload | bun, PRs only |
 | `fallow (full repo)` | full-repo `fallow`, the type-aware pass, the health grade, SARIF upload, baseline artifact | bun, pushes to `development` only |
 
-The first two are split so a broken type or a failing unit test goes red in under a minute rather
-than behind a wasm compile. The first job deliberately never builds the wasm, which makes it the
+The first three are split so a broken type, a failing unit test or an unformatted Rust file goes
+red in under a minute rather than behind a wasm compile and a browser download — which is why
+`cargo test` runs in its own job rather than in `end-to-end`, where it used to sit. The first job deliberately never builds the wasm, which makes it the
 enforcement of the toolchain-less smoke test above: a `typecheck` that starts needing
 `wasm/diff-wasm/pkg/` fails there.
 

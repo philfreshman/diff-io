@@ -29,6 +29,7 @@ use diff_wasm::{build_diff_tree, extract_archive_bytes, DiffFileEntry, FileType}
 /// What `diff.worker.ts` passes; the tree must be the one the page sees.
 const SIMILARITY_THRESHOLD: f64 = 0.75;
 
+#[cfg_attr(test, derive(Debug))]
 struct Args {
     from: String,
     to: String,
@@ -37,10 +38,16 @@ struct Args {
 }
 
 fn parse_args() -> Result<Args, String> {
+    parse_argv(std::env::args().skip(1))
+}
+
+/// Split from `parse_args` so the flag grammar can be tested without a
+/// process to hand it arguments.
+fn parse_argv(argv: impl IntoIterator<Item = String>) -> Result<Args, String> {
     let mut positional = Vec::new();
     let mut ignore_whitespace = false;
     let mut runs = 5;
-    let mut argv = std::env::args().skip(1);
+    let mut argv = argv.into_iter();
     while let Some(arg) = argv.next() {
         match arg.as_str() {
             "--ignore-whitespace" => ignore_whitespace = true,
@@ -62,7 +69,9 @@ fn parse_args() -> Result<Args, String> {
             ignore_whitespace,
             runs,
         }),
-        _ => Err("usage: bench <from-archive> <to-archive> [--ignore-whitespace] [--runs N]".into()),
+        _ => {
+            Err("usage: bench <from-archive> <to-archive> [--ignore-whitespace] [--runs N]".into())
+        }
     }
 }
 
@@ -181,5 +190,180 @@ fn main() -> ExitCode {
             eprintln!("bench: {err}");
             ExitCode::FAILURE
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use diff_wasm::DiffStatus;
+
+    fn argv(args: &[&str]) -> Vec<String> {
+        args.iter().map(|arg| (*arg).to_string()).collect()
+    }
+
+    #[test]
+    fn two_archives_are_the_whole_required_grammar() {
+        let args = parse_argv(argv(&["from.crate", "to.crate"])).unwrap();
+        assert_eq!(
+            (args.from.as_str(), args.to.as_str()),
+            ("from.crate", "to.crate")
+        );
+        assert!(!args.ignore_whitespace);
+        assert_eq!(args.runs, 5);
+    }
+
+    #[test]
+    fn the_flags_may_come_before_between_or_after_the_archives() {
+        let args = parse_argv(argv(&["--runs", "3", "a", "--ignore-whitespace", "b"])).unwrap();
+        assert_eq!((args.from.as_str(), args.to.as_str()), ("a", "b"));
+        assert!(args.ignore_whitespace);
+        assert_eq!(args.runs, 3);
+    }
+
+    /// A run count of zero would median an empty slice, which panics; the
+    /// flag rejects it instead.
+    #[test]
+    fn runs_must_be_a_positive_integer() {
+        for bad in [
+            argv(&["a", "b", "--runs", "0"]),
+            argv(&["a", "b", "--runs", "many"]),
+            argv(&["a", "b", "--runs"]),
+        ] {
+            assert_eq!(
+                parse_argv(bad).unwrap_err(),
+                "--runs takes a positive integer"
+            );
+        }
+    }
+
+    #[test]
+    fn an_unknown_flag_is_not_treated_as_an_archive() {
+        assert_eq!(
+            parse_argv(argv(&["a", "b", "--fast"])).unwrap_err(),
+            "unknown flag --fast"
+        );
+    }
+
+    #[test]
+    fn anything_but_exactly_two_archives_is_a_usage_error() {
+        for bad in [argv(&[]), argv(&["a"]), argv(&["a", "b", "c"])] {
+            assert!(parse_argv(bad).unwrap_err().starts_with("usage: bench "));
+        }
+    }
+
+    #[test]
+    fn the_median_is_the_middle_sample_whatever_order_they_arrive_in() {
+        let mut samples = [30, 10, 20].map(Duration::from_millis);
+        assert_eq!(median(&mut samples), Duration::from_millis(20));
+
+        // Even count: the upper of the two middles, which is what
+        // `len / 2` indexes.
+        let mut even = [10, 20, 30, 40].map(Duration::from_millis);
+        assert_eq!(median(&mut even), Duration::from_millis(30));
+
+        let mut one = [7].map(Duration::from_millis);
+        assert_eq!(median(&mut one), Duration::from_millis(7));
+    }
+
+    #[test]
+    fn a_duration_prints_as_milliseconds() {
+        assert_eq!(ms(Duration::from_millis(1500)), 1500.0);
+        assert_eq!(ms(Duration::from_micros(500)), 0.5);
+        assert_eq!(ms(Duration::ZERO), 0.0);
+    }
+
+    fn file(path: &str, status: DiffStatus) -> DiffFileEntry {
+        DiffFileEntry {
+            path: path.to_string(),
+            old_path: None,
+            file_type: FileType::File,
+            status,
+            added: Some(1),
+            removed: Some(0),
+            children: None,
+        }
+    }
+
+    fn directory(path: &str, children: Vec<DiffFileEntry>) -> DiffFileEntry {
+        DiffFileEntry {
+            path: path.to_string(),
+            old_path: None,
+            file_type: FileType::Directory,
+            status: DiffStatus::Modified,
+            added: Some(1),
+            removed: Some(0),
+            children: Some(children),
+        }
+    }
+
+    fn hash(node: &DiffFileEntry) -> u64 {
+        let mut hasher = DefaultHasher::new();
+        fingerprint(node, &mut hasher);
+        hasher.finish()
+    }
+
+    /// The whole point of the fingerprint: two builds that agree print the
+    /// same number, and any node's path, status, `oldPath` or counts moving
+    /// changes it.
+    #[test]
+    fn the_fingerprint_covers_every_field_it_claims_to() {
+        let tree = directory("/", vec![file("a.rs", DiffStatus::Modified)]);
+        assert_eq!(
+            hash(&tree),
+            hash(&directory("/", vec![file("a.rs", DiffStatus::Modified)]))
+        );
+
+        assert_ne!(
+            hash(&tree),
+            hash(&directory("/", vec![file("b.rs", DiffStatus::Modified)]))
+        );
+        assert_ne!(
+            hash(&tree),
+            hash(&directory("/", vec![file("a.rs", DiffStatus::Added)]))
+        );
+
+        let mut renamed = directory("/", vec![file("a.rs", DiffStatus::Modified)]);
+        renamed.children.as_mut().unwrap()[0].old_path = Some("old.rs".to_string());
+        assert_ne!(hash(&tree), hash(&renamed));
+
+        let mut recounted = directory("/", vec![file("a.rs", DiffStatus::Modified)]);
+        recounted.children.as_mut().unwrap()[0].added = Some(2);
+        assert_ne!(hash(&tree), hash(&recounted));
+    }
+
+    /// Order matters: the same nodes rearranged are a different tree.
+    #[test]
+    fn the_fingerprint_is_taken_in_tree_order() {
+        let one = directory(
+            "/",
+            vec![
+                file("a.rs", DiffStatus::Added),
+                file("b.rs", DiffStatus::Removed),
+            ],
+        );
+        let other = directory(
+            "/",
+            vec![
+                file("b.rs", DiffStatus::Removed),
+                file("a.rs", DiffStatus::Added),
+            ],
+        );
+        assert_ne!(hash(&one), hash(&other));
+    }
+
+    #[test]
+    fn only_files_are_counted_however_deep_they_sit() {
+        let tree = directory(
+            "/",
+            vec![
+                file("a.rs", DiffStatus::Added),
+                directory("src", vec![file("src/b.rs", DiffStatus::Added)]),
+                directory("empty", vec![]),
+            ],
+        );
+        assert_eq!(count_files(&tree), 2);
+        assert_eq!(count_files(&directory("/", vec![])), 0);
+        assert_eq!(count_files(&file("a.rs", DiffStatus::Added)), 1);
     }
 }

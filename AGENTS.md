@@ -61,7 +61,8 @@ around it is not, so do not let that command overwrite this file wholesale.
 ## Two things fallow will not tell you
 
 - **The engine is Rust.** `wasm/diff-wasm/` is outside every analysis on this page. It has its own
-  tests (`cd wasm/diff-wasm && cargo test`), and the checked-in TypeScript declaration for it drifts
+  tests and its own formatter (`cd wasm/diff-wasm && cargo test`, `cargo fmt --all`), both gated by
+  the `rustfmt, engine tests` CI job, and the checked-in TypeScript declaration for it drifts
   unless `bun run check:wasm-types` is run after `bun run build:wasm`.
 - **The DOM, the worker and the wasm are covered by Playwright, not by unit tests**, because the
   engine only runs in a browser. `fallow health --coverage-gaps` cannot see that coverage, so treat
